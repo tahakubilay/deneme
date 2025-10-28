@@ -11,6 +11,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import HistoryIcon from '@mui/icons-material/History';
+import PersonIcon from '@mui/icons-material/Person'; // YENİ
 import moment from 'moment';
 
 const getStatusChipProps = (status) => {
@@ -32,6 +33,7 @@ function IsteklerimPage() {
     const [gelenIstekler, setGelenIstekler] = useState([]);
     const [gidenTakasIstekleri, setGidenTakasIstekleri] = useState([]);
     const [gidenIptalIstekleri, setGidenIptalIstekleri] = useState([]);
+    const [profilTalebi, setProfilTalebi] = useState(null); // YENİ
     const [takasGecmisi, setTakasGecmisi] = useState([]);
     const [iptalGecmisi, setIptalGecmisi] = useState([]);
     const [kullanici, setKullanici] = useState(null);
@@ -108,6 +110,16 @@ function IsteklerimPage() {
                 setError("İptal istekleri yüklenirken bir hata oluştu.");
             });
 
+        // Profil güncelleme talebi çek (YENİ)
+        axios.get('http://127.0.0.1:8000/api/kullanicilar/profil-talebi/', authHeaders)
+            .then(response => {
+                setProfilTalebi(response.data);
+            })
+            .catch(error => {
+                // Talep yoksa 404 dönecek, sorun değil
+                setProfilTalebi(null);
+            });
+
     }, [kullanici, getAuthHeaders]);
 
     useEffect(() => {
@@ -173,7 +185,7 @@ function IsteklerimPage() {
                     <Card sx={{ bgcolor: 'info.light', color: 'info.contrastText' }}>
                         <CardContent sx={{ textAlign: 'center', py: 2 }}>
                             <Typography variant="h4" fontWeight="bold">
-                                {gidenTakasIstekleri.length + gidenIptalIstekleri.length}
+                                {gidenTakasIstekleri.length + gidenIptalIstekleri.length + (profilTalebi ? 1 : 0)}
                             </Typography>
                             <Typography variant="caption">Bekleyen İstek</Typography>
                         </CardContent>
@@ -206,7 +218,7 @@ function IsteklerimPage() {
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                 <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
                     <Tab label={`Gelen (${gelenIstekler.length})`} />
-                    <Tab label={`Bekleyen (${gidenTakasIstekleri.length + gidenIptalIstekleri.length})`} />
+                    <Tab label={`Bekleyen (${gidenTakasIstekleri.length + gidenIptalIstekleri.length + (profilTalebi ? 1 : 0)})`} />
                     <Tab label={`Geçmiş (${takasGecmisi.length + iptalGecmisi.length})`} />
                 </Tabs>
             </Box>
@@ -240,6 +252,21 @@ function IsteklerimPage() {
             {/* TAB 1: Bekleyen İstekler */}
             {tabValue === 1 && (
                 <>
+                    {/* Profil Güncelleme Talebi (YENİ) */}
+                    {profilTalebi && (
+                        <Paper sx={{ p: 2, mb: 2, bgcolor: 'info.lighter' }}>
+                            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <PersonIcon color="info" /> Profil Güncelleme Talebi
+                            </Typography>
+                            <Alert severity="info">
+                                Profil güncelleme talebiniz yönetici onayı bekliyor.
+                                {profilTalebi.yeni_telefon && ` Yeni Telefon: ${profilTalebi.yeni_telefon}`}
+                                {profilTalebi.yeni_adres && ` | Yeni Adres güncelleniyor`}
+                                {profilTalebi.profil_resmi_var && ` | Yeni profil resmi`}
+                            </Alert>
+                        </Paper>
+                    )}
+
                     <Paper sx={{ p: 2, mb: 2 }}>
                         <Typography variant="h6" gutterBottom>Bekleyen Takas İstekleri</Typography>
                         <List>

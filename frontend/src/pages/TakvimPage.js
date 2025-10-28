@@ -13,15 +13,9 @@ import {
     ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, 
     DialogActions, Chip, Grid, Card, CardContent, Divider, IconButton, Tooltip
 } from '@mui/material';
-import { FileDownload } from '@mui/icons-material';
+import { FileDownload, Refresh, CalendarMonth, ViewWeek, FilterList} from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { Refresh } from '@mui/icons-material';
-import { CalendarMonth } from '@mui/icons-material';
-import { ViewWeek } from '@mui/icons-material';
-import { FilterList } from '@mui/icons-material';
-
-
 
 moment.locale('tr');
 const localizer = momentLocalizer(moment);
@@ -226,7 +220,90 @@ function TakvimPage() {
     const handleNavigate = useCallback((newDate) => setDate(newDate), [setDate]);
     const handleViewChange = useCallback((newView) => setView(newView), [setView]);
 
-    const handlePlanOlustur = () => {
+    const handlePDFExport = () => {
+        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
+        const currentWeekStart = moment(date).startOf('isoWeek');
+        
+        // Başlık
+        doc.setFontSize(16);
+        doc.text('Vardiya Takvimi', 148, 15, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text(
+            `${currentWeekStart.format('DD MMMM YYYY')} - ${currentWeekStart.clone().add(6, 'days').format('DD MMMM YYYY')}`,
+            148, 22,
+            { align: 'center' }
+        );
+
+        // Tablo verilerini hazırla
+        const weekDays = Array(7).fill(null).map((_, i) => 
+            currentWeekStart.clone().add(i, 'days').format('dddd\nDD.MM')
+        );
+
+        const subeler = {};
+        filteredEvents.forEach(event => {
+            const eventDate = moment(event.start);
+            if (eventDate.isBetween(currentWeekStart, currentWeekStart.clone().add(6, 'days'), 'day', '[]')) {
+                const subeId = event.resource.sube;
+                const subeAdi = event.resource.sube_adi;
+                const dayIndex = eventDate.isoWeekday() - 1;
+                
+                if (!subeler[subeId]) {
+                    subeler[subeId] = { 
+                        adi: subeAdi, 
+                        gunler: Array(7).fill(null).map(() => []) 
+                    };
+                }
+                
+                subeler[subeId].gunler[dayIndex].push({
+                    calisan: event.resource.calisan_adi,
+                    baslangic: moment(event.start).format('HH:mm'),
+                    bitis: moment(event.end).format('HH:mm')
+                });
+            }
+        });
+
+        // Tablo oluştur
+        const tableData = Object.values(subeler).map(sube => {
+            const row = [sube.adi];
+            sube.gunler.forEach(gunVardiyalar => {
+                if (gunVardiyalar.length === 0) {
+                    row.push('-');
+                } else {
+                    const vardiyaMetni = gunVardiyalar
+                        .map(v => `${v.calisan}\n${v.baslangic}-${v.bitis}`)
+                        .join('\n\n');
+                    row.push(vardiyaMetni);
+                }
+            });
+            return row;
+        });
+
+        doc.autoTable({
+            head: [['Şube', ...weekDays]],
+            body: tableData,
+            startY: 30,
+            styles: { 
+                fontSize: 8, 
+                cellPadding: 2,
+                halign: 'center',
+                valign: 'middle'
+            },
+            headStyles: { 
+                fillColor: [102, 126, 234],
+                fontStyle: 'bold'
+            },
+            columnStyles: {
+                0: { cellWidth: 40, fontStyle: 'bold', halign: 'left' }
+            },
+            alternateRowStyles: {
+                fillColor: [245, 245, 245]
+            },
+            margin: { top: 30, left: 10, right: 10 }
+        });
+
+        doc.save(`Vardiya_Takvimi_${currentWeekStart.format('YYYY-MM-DD')}.pdf`);
+    };
+       const handlePlanOlustur = () => { 
         setGenerating(true); 
         setError(''); 
         setSuccessMessage('');
@@ -290,6 +367,16 @@ function TakvimPage() {
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    {/* PDF Export Butonu */}
+                    <Button
+                        variant="outlined"
+                        startIcon={<FileDownload />}
+                        onClick={handlePDFExport}
+                        color="secondary"
+                    >
+                        PDF İndir
+                    </Button>
+
                     <Tooltip title="Yenile">
                         <IconButton onClick={fetchVardiyalar} color="primary">
                             <Refresh />

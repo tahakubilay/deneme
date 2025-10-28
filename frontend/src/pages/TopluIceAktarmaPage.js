@@ -340,5 +340,4 @@ function TopluIceAktarmaPage() {
         </Container>
     );
 }
-
 export default TopluIceAktarmaPage;
