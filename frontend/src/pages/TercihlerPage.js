@@ -32,7 +32,8 @@ function TercihlerPage() {
         const authHeaders = getAuthHeaders();
         Promise.all([
             axios.get('http://127.0.0.1:8000/api/schedules/tercihler/', authHeaders),
-            axios.get('http://127.0.0.1:8000/api/kullanicilar/liste/', authHeaders),
+            //  BURADA DEĞİŞİKLİK: /liste/ kaldırıldı
+            axios.get('http://127.0.0.1:8000/api/kullanicilar/', authHeaders),
             axios.get('http://127.0.0.1:8000/api/subeler/', authHeaders)
         ]).then(([tercihlerRes, kullanicilarRes, subelerRes]) => {
             setTercihler(tercihlerRes.data);

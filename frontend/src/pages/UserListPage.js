@@ -44,7 +44,8 @@ function UserListPage() {
     };
 
     const fetchKullanicilar = () => {
-        axios.get('http://127.0.0.1:8000/api/kullanicilar/liste/', getAuthHeaders())
+        // URL'den /liste/ kaldırıldı
+        axios.get('http://127.0.0.1:8000/api/kullanicilar/', getAuthHeaders())
         .then(response => {
             setKullanicilar(response.data);
         })
@@ -68,10 +69,11 @@ function UserListPage() {
     const handleDelete = (userId) => {
         if (window.confirm("Bu kullanıcıyı kalıcı olarak silmek istediğinizden emin misiniz?")) {
             setError(''); setSuccess('');
-            axios.delete(`http://127.0.0.1:8000/api/kullanicilar/liste/${userId}/`, getAuthHeaders())
+            // URL'den /liste/ kaldırıldı
+            axios.delete(`http://127.0.0.1:8000/api/kullanicilar/${userId}/`, getAuthHeaders())
                 .then(() => {
                     setSuccess("Kullanıcı başarıyla silindi.");
-                    fetchKullanicilar(); // Listeyi yenile
+                    fetchKullanicilar();
                 })
                 .catch(error => {
                     console.error("Kullanıcı silinirken hata!", error);
@@ -100,11 +102,12 @@ function UserListPage() {
 
     const handleSaveChanges = () => {
         setError(''); setSuccess('');
-        axios.patch(`http://127.0.0.1:8000/api/kullanicilar/liste/${editingUser.id}/`, editedData, getAuthHeaders())
+        // URL'den /liste/ kaldırıldı
+        axios.patch(`http://127.0.0.1:8000/api/kullanicilar/${editingUser.id}/`, editedData, getAuthHeaders())
             .then(() => {
                 setSuccess("Kullanıcı bilgileri başarıyla güncellendi.");
                 handleModalClose();
-                fetchKullanicilar(); // Listeyi yenile
+                fetchKullanicilar();
             })
             .catch(error => {
                 console.error("Kullanıcı güncellenirken hata!", error.response?.data);
