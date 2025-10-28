@@ -2,18 +2,20 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, ProfilGuncellemeTalebi
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    # Kullanıcı listesinde görünecek alanları belirliyoruz
     list_display = ['username', 'email', 'first_name', 'last_name', 'rol', 'is_staff']
     
-    # Kullanıcı düzenleme formuna kendi eklediğimiz alanları dahil ediyoruz
-    # Orijinal fieldsets'in üzerine bizimkileri ekliyoruz
     fieldsets = UserAdmin.fieldsets + (
-        ('Ek Bilgiler', {'fields': ('rol', 'telefon', 'adres')}),
+        ('Ek Bilgiler', {'fields': ('rol', 'telefon', 'adres', 'profil_resmi', 'cinsiyet', 'enlem', 'boylam')}),
     )
 
-# CustomUser modelini, yukarıda tasarladığımız CustomUserAdmin görünümüyle kaydediyoruz
+class ProfilGuncellemeTalebiAdmin(admin.ModelAdmin):
+    list_display = ['calisan', 'durum', 'olusturma_tarihi']
+    list_filter = ['durum', 'olusturma_tarihi']
+    search_fields = ['calisan__username', 'calisan__first_name', 'calisan__last_name']
+
 admin.site.register(CustomUser, CustomUserAdmin)
+admin.site.register(ProfilGuncellemeTalebi, ProfilGuncellemeTalebiAdmin)

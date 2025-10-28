@@ -15,6 +15,12 @@ import AdminOnayPage from './pages/AdminOnayPage';
 import TercihlerPage from './pages/TercihlerPage';
 import SubeSaatleriPage from './pages/SubeSaatleriPage';
 import KisitlamaKurallariPage from './pages/KisitlamaKurallariPage';
+import VardiyaKontrolPage from './pages/VardiyaKontrolPage';
+import IstatistiklerPage from './pages/IstatistiklerPage';
+import ProfilPage from './pages/ProfilPage';
+import AdminProfilOnayPage from './pages/AdminProfilOnayPage';
+
+
 // Bileşenlerimizi import ediyoruz
 import Navbar from './components/Navbar';
 import './App.css';
@@ -66,6 +72,11 @@ function App() {
             <Route path="/sube-saatleri" element={<SubeSaatleriPage />} />
             <Route path="/kisitlama-kurallari" element={<KisitlamaKurallariPage />} />
             <Route path="/" element={<Navigate replace to="/login" />} />
+            <Route path="/vardiya-kontrol" element={<VardiyaKontrolPage />} />
+            <Route path="/profil" element={<ProfilPage />} />
+            <Route path="/admin/istatistikler" element={<IstatistiklerPage />} />
+            <Route path="/admin/profil-onaylari" element={<AdminProfilOnayPage />} />
+
           </Routes>
         </main>
       </div>

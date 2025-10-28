@@ -1,4 +1,4 @@
-// src/pages/TakvimPage.js
+// frontend/src/pages/TakvimPage.js - GELİŞTİRİLMİŞ VERSİYON
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
@@ -6,34 +6,155 @@ import moment from 'moment';
 import 'moment/locale/tr';
 import axios from 'axios';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import SubeHaftalikPlan from '../components/SubeHaftalikPlan'; // YENİ
+import SubeHaftalikPlan from '../components/SubeHaftalikPlan';
 
 import {
     Container, Typography, Button, Box, CircularProgress, Alert, Paper, useTheme,
-    ToggleButton, ToggleButtonGroup // YENİ
+    ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, 
+    DialogActions, Chip, Grid, Card, CardContent, Divider, IconButton, Tooltip
 } from '@mui/material';
+import { 
+    CalendarMonth, ViewWeek, FilterList, TrendingUp, 
+    Refresh, FileDownload 
+} from '@mui/icons-material';
 
 moment.locale('tr');
 const localizer = momentLocalizer(moment);
 const allViews = Object.keys(Views).map((k) => Views[k]);
 
-// --- Özel Vardiya Kutusu Bileşeni ---
-const CustomEvent = ({ event }) => {
+// Özel stil için EventWrapper
+const CustomEventWrapper = ({ event, children }) => {
+    const theme = useTheme();
+    const isCompleted = event.resource?.durum === 'tamamlandi';
+    const isCancelled = event.resource?.durum === 'iptal';
+    
     return (
-        <Box sx={{ height: '100%', overflow: 'hidden' }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                {moment(event.start).format('HH:mm')} - {moment(event.end).format('HH:mm')}
+        <div style={{ 
+            height: '100%',
+            opacity: isCancelled ? 0.5 : 1,
+            border: isCompleted ? `2px solid ${theme.palette.success.main}` : 'none',
+            borderRadius: '4px'
+        }}>
+            {children}
+        </div>
+    );
+};
+
+// Özel Vardiya Kutusu
+const CustomEvent = ({ event }) => {
+    const statusIcons = {
+        'tamamlandi': '✓',
+        'iptal': '✗',
+        'baslatildi': '▶',
+        'planlandi': '●'
+    };
+
+    return (
+        <Box sx={{ height: '100%', overflow: 'hidden', px: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                {statusIcons[event.resource?.durum] || ''} {moment(event.start).format('HH:mm')} - {moment(event.end).format('HH:mm')}
             </Typography>
-            <Typography variant="caption" component="div" sx={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+            <Typography variant="caption" component="div" sx={{ 
+                whiteSpace: 'nowrap', 
+                textOverflow: 'ellipsis', 
+                overflow: 'hidden',
+                fontSize: '0.7rem'
+            }}>
                 {event.title}
             </Typography>
         </Box>
     );
 };
 
+// Vardiya Detay Dialog
+const VardiyaDetayDialog = ({ open, onClose, vardiya }) => {
+    if (!vardiya) return null;
+
+    const getDurumChip = (durum) => {
+        const durumMap = {
+            'planlandi': { label: 'Planlandı', color: 'primary' },
+            'baslatildi': { label: 'Başlatıldı', color: 'info' },
+            'tamamlandi': { label: 'Tamamlandı', color: 'success' },
+            'iptal': { label: 'İptal', color: 'error' },
+            'taslak': { label: 'Taslak', color: 'default' }
+        };
+        const config = durumMap[durum] || durumMap.taslak;
+        return <Chip label={config.label} color={config.color} size="small" />;
+    };
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
+                Vardiya Detayları
+            </DialogTitle>
+            <DialogContent sx={{ mt: 2 }}>
+                <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="h6">{vardiya.resource.sube_adi}</Typography>
+                            {getDurumChip(vardiya.resource.durum)}
+                        </Box>
+                        <Divider />
+                    </Grid>
+
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">Çalışan</Typography>
+                        <Typography variant="body1" fontWeight="bold">{vardiya.resource.calisan_adi}</Typography>
+                    </Grid>
+
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">Tarih</Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                            {moment(vardiya.start).format('DD MMMM YYYY')}
+                        </Typography>
+                    </Grid>
+
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">Planlanan Saat</Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                            {moment(vardiya.start).format('HH:mm')} - {moment(vardiya.end).format('HH:mm')}
+                        </Typography>
+                    </Grid>
+
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">Süre</Typography>
+                        <Typography variant="body1" fontWeight="bold">
+                            {moment.duration(moment(vardiya.end).diff(moment(vardiya.start))).asHours().toFixed(1)} saat
+                        </Typography>
+                    </Grid>
+
+                    {vardiya.resource.gercek_baslangic_zamani && (
+                        <>
+                            <Grid item xs={12}><Divider /></Grid>
+                            <Grid item xs={6}>
+                                <Typography variant="body2" color="text.secondary">Gerçek Başlangıç</Typography>
+                                <Typography variant="body1" fontWeight="bold" color="success.main">
+                                    {moment(vardiya.resource.gercek_baslangic_zamani).format('HH:mm')}
+                                </Typography>
+                            </Grid>
+                            {vardiya.resource.gercek_bitis_zamani && (
+                                <Grid item xs={6}>
+                                    <Typography variant="body2" color="text.secondary">Gerçek Bitiş</Typography>
+                                    <Typography variant="body1" fontWeight="bold" color="success.main">
+                                        {moment(vardiya.resource.gercek_bitis_zamani).format('HH:mm')}
+                                    </Typography>
+                                </Grid>
+                            )}
+                        </>
+                    )}
+                </Grid>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Kapat</Button>
+            </DialogActions>
+        </Dialog>
+    );
+};
+
 function TakvimPage() {
     const theme = useTheme();
     const [events, setEvents] = useState([]);
+    const [filteredEvents, setFilteredEvents] = useState([]);
     const [date, setDate] = useState(new Date());
     const [view, setView] = useState(Views.MONTH);
     const [loading, setLoading] = useState(true);
@@ -41,7 +162,10 @@ function TakvimPage() {
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
-    const [activeView, setActiveView] = useState('calendar'); // YENİ STATE
+    const [activeView, setActiveView] = useState('calendar');
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+    const [filterStatus, setFilterStatus] = useState('all');
 
     const getAuthHeaders = useCallback(() => {
         const token = localStorage.getItem('accessToken');
@@ -70,6 +194,7 @@ function TakvimPage() {
                     resource: vardiya
                 }));
                 setEvents(formattedEvents);
+                setFilteredEvents(formattedEvents);
             })
             .catch(error => { 
                 console.error("Vardiya fetch error!", error); 
@@ -82,6 +207,17 @@ function TakvimPage() {
         fetchVardiyalar();
     }, [fetchVardiyalar]);
 
+    // Filtreleme
+    useEffect(() => {
+        if (filterStatus === 'all') {
+            setFilteredEvents(events);
+        } else if (filterStatus === 'mine') {
+            setFilteredEvents(events.filter(e => e.resource?.calisan === currentUser?.id));
+        } else {
+            setFilteredEvents(events.filter(e => e.resource?.durum === filterStatus));
+        }
+    }, [filterStatus, events, currentUser]);
+
     const handleNavigate = useCallback((newDate) => setDate(newDate), [setDate]);
     const handleViewChange = useCallback((newView) => setView(newView), [setView]);
 
@@ -92,7 +228,7 @@ function TakvimPage() {
         const currentMonth = moment(date).format('YYYY-MM');
         axios.post('http://127.0.0.1:8000/api/schedules/plan-olustur/', { donem: currentMonth }, getAuthHeaders())
             .then(response => {
-                setSuccessMessage(response.data.mesaj || 'Plan başarıyla oluşturuldu! Takvim yenileniyor...');
+                setSuccessMessage(response.data.mesaj || 'Plan başarıyla oluşturuldu!');
                 fetchVardiyalar();
             })
             .catch(error => {
@@ -102,53 +238,152 @@ function TakvimPage() {
     };
 
     const handleSelectEvent = useCallback((event) => {
-        console.log("Vardiya tıklandı (işlem yok): ", event.title);
+        setSelectedEvent(event);
+        setDetailDialogOpen(true);
     }, []);
 
     const eventPropGetter = useCallback((event) => {
         const isOwnShift = currentUser && event.resource?.calisan === currentUser.id;
+        const durum = event.resource?.durum;
+        
+        let backgroundColor = theme.palette.grey[500];
+        if (isOwnShift) backgroundColor = theme.palette.primary.main;
+        if (durum === 'tamamlandi') backgroundColor = theme.palette.success.main;
+        if (durum === 'iptal') backgroundColor = theme.palette.error.main;
+        if (durum === 'baslatildi') backgroundColor = theme.palette.info.main;
+
         const style = {
-            backgroundColor: isOwnShift ? theme.palette.primary.main : theme.palette.grey[500],
-            color: theme.palette.getContrastText(isOwnShift ? theme.palette.primary.main : theme.palette.grey[500]),
+            backgroundColor,
+            color: theme.palette.getContrastText(backgroundColor),
             borderRadius: '4px',
             border: 'none',
-            opacity: 0.9,
-            cursor: 'default'
+            opacity: durum === 'iptal' ? 0.6 : 0.95,
+            cursor: 'pointer'
         };
         return { style };
     }, [currentUser, theme]);
 
-    return (
-        <Container maxWidth="xl" sx={{ mt: 4 }}>
-             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography component="h1" variant="h4">Vardiya Planı</Typography>
-                
-                <ToggleButtonGroup
-                    value={activeView}
-                    exclusive
-                    onChange={(e, newView) => {if (newView) setActiveView(newView);}}
-                    aria-label="görünüm seçimi"
-                >
-                    <ToggleButton value="calendar" aria-label="standart takvim">Standart Takvim</ToggleButton>
-                    <ToggleButton value="branch_weekly" aria-label="şube haftalık plan">Şube Haftalık Planı</ToggleButton>
-                </ToggleButtonGroup>
+    // İstatistikler
+    const stats = {
+        toplam: filteredEvents.length,
+        tamamlanan: filteredEvents.filter(e => e.resource?.durum === 'tamamlandi').length,
+        planlanan: filteredEvents.filter(e => e.resource?.durum === 'planlandi').length,
+        iptal: filteredEvents.filter(e => e.resource?.durum === 'iptal').length
+    };
 
-                {currentUser?.is_staff && (
-                    <Button variant="contained" onClick={handlePlanOlustur} disabled={generating || loading}>
-                        {generating ? <CircularProgress size={24} /> : `${moment(date).format('MMMM YYYY')} Planını Oluştur`}
-                    </Button>
-                )}
+    return (
+        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+            {/* Header */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                    <Typography variant="h4" fontWeight="bold" gutterBottom>
+                        Vardiya Takvimi
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        {moment(date).format('MMMM YYYY')} - Toplam {filteredEvents.length} vardiya
+                    </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Tooltip title="Yenile">
+                        <IconButton onClick={fetchVardiyalar} color="primary">
+                            <Refresh />
+                        </IconButton>
+                    </Tooltip>
+
+                    <ToggleButtonGroup
+                        value={activeView}
+                        exclusive
+                        onChange={(e, newView) => {if (newView) setActiveView(newView);}}
+                        size="small"
+                    >
+                        <ToggleButton value="calendar">
+                            <CalendarMonth sx={{ mr: 1 }} /> Takvim
+                        </ToggleButton>
+                        <ToggleButton value="branch_weekly">
+                            <ViewWeek sx={{ mr: 1 }} /> Şube Planı
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+
+                    {currentUser?.is_staff && (
+                        <Button 
+                            variant="contained" 
+                            onClick={handlePlanOlustur} 
+                            disabled={generating || loading}
+                            startIcon={generating ? <CircularProgress size={20} /> : null}
+                        >
+                            Plan Oluştur
+                        </Button>
+                    )}
+                </Box>
             </Box>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            {successMessage && <Alert severity="success" sx={{ mb: 2 }}>{successMessage}</Alert>}
+
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+            {successMessage && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
+
+            {/* İstatistik Kartları */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={6} sm={3}>
+                    <Card sx={{ bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                            <Typography variant="caption">Toplam</Typography>
+                            <Typography variant="h5" fontWeight="bold">{stats.toplam}</Typography>
+                        </CardContent>
+                    </Card>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <Card sx={{ bgcolor: 'success.light', color: 'success.contrastText' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                            <Typography variant="caption">Tamamlanan</Typography>
+                            <Typography variant="h5" fontWeight="bold">{stats.tamamlanan}</Typography>
+                        </CardContent>
+                    </Card>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <Card sx={{ bgcolor: 'info.light', color: 'info.contrastText' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                            <Typography variant="caption">Planlanan</Typography>
+                            <Typography variant="h5" fontWeight="bold">{stats.planlanan}</Typography>
+                        </CardContent>
+                    </Card>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                    <Card sx={{ bgcolor: 'error.light', color: 'error.contrastText' }}>
+                        <CardContent sx={{ py: 1.5 }}>
+                            <Typography variant="caption">İptal</Typography>
+                            <Typography variant="h5" fontWeight="bold">{stats.iptal}</Typography>
+                        </CardContent>
+                    </Card>
+                </Grid>
+            </Grid>
+
+            {/* Filtre */}
+            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterList />
+                <ToggleButtonGroup
+                    value={filterStatus}
+                    exclusive
+                    onChange={(e, newFilter) => {if (newFilter) setFilterStatus(newFilter);}}
+                    size="small"
+                >
+                    <ToggleButton value="all">Tümü</ToggleButton>
+                    {currentUser && <ToggleButton value="mine">Benimkiler</ToggleButton>}
+                    <ToggleButton value="planlandi">Planlanan</ToggleButton>
+                    <ToggleButton value="tamamlandi">Tamamlanan</ToggleButton>
+                </ToggleButtonGroup>
+            </Box>
 
             {activeView === 'calendar' ? (
                 <>
-                    <Paper sx={{ height: '75vh', p: 2 }}>
-                        {loading ? ( <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /><Typography sx={{ ml: 2 }}>Yükleniyor...</Typography></Box> ) : (
+                    <Paper sx={{ height: '70vh', p: 2 }}>
+                        {loading ? ( 
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                                <CircularProgress />
+                            </Box> 
+                        ) : (
                             <Calendar
                                 localizer={localizer} 
-                                events={events} 
+                                events={filteredEvents} 
                                 startAccessor="start" 
                                 endAccessor="end"
                                 date={date} 
@@ -157,29 +392,53 @@ function TakvimPage() {
                                 view={view} 
                                 onView={handleViewChange} 
                                 views={allViews}
-                                messages={{next: "İleri", previous: "Geri", today: "Bugün", month: "Ay", week: "Hafta", day: "Gün", agenda: "Ajanda"}}
+                                messages={{
+                                    next: "İleri", 
+                                    previous: "Geri", 
+                                    today: "Bugün", 
+                                    month: "Ay", 
+                                    week: "Hafta", 
+                                    day: "Gün"
+                                }}
                                 style={{ height: '100%' }}
                                 eventPropGetter={eventPropGetter}
-                                components={{ event: CustomEvent }}
+                                components={{ 
+                                    event: CustomEvent,
+                                    eventWrapper: CustomEventWrapper
+                                }}
                             />
                         )}
                     </Paper>
                     
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, gap: 4 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Box sx={{ width: 14, height: 14, backgroundColor: theme.palette.primary.main, mr: 1, borderRadius: '2px' }} />
                             <Typography variant="body2">Vardiyanız</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Box sx={{ width: 14, height: 14, backgroundColor: theme.palette.grey[500], mr: 1, borderRadius: '2px' }} />
-                            <Typography variant="body2">Diğer Çalışanlar</Typography>
+                            <Box sx={{ width: 14, height: 14, backgroundColor: theme.palette.success.main, mr: 1, borderRadius: '2px' }} />
+                            <Typography variant="body2">Tamamlanan</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ width: 14, height: 14, backgroundColor: theme.palette.info.main, mr: 1, borderRadius: '2px' }} />
+                            <Typography variant="body2">Başlatıldı</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ width: 14, height: 14, backgroundColor: theme.palette.error.main, mr: 1, borderRadius: '2px', opacity: 0.6 }} />
+                            <Typography variant="body2">İptal</Typography>
                         </Box>
                     </Box>
                 </>
             ) : (
-                <SubeHaftalikPlan events={events} loading={loading} currentUser={currentUser} />
+                <SubeHaftalikPlan events={filteredEvents} loading={loading} currentUser={currentUser} />
             )}
 
+            {/* Detay Dialog */}
+            <VardiyaDetayDialog 
+                open={detailDialogOpen}
+                onClose={() => setDetailDialogOpen(false)}
+                vardiya={selectedEvent}
+            />
         </Container>
     );
 }

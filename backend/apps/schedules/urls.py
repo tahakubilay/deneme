@@ -19,7 +19,9 @@ from .views import (
     VardiyaIptalIstegiGeriCekView,
     KendiIptalIsteklerimListView,
     CalisanTercihiViewSet,
-    KisitlamaKuraliViewSet
+    KisitlamaKuraliViewSet,
+    VardiyaBaslatBitirView,
+    AdminIstatistiklerView,
 )
 
 router = DefaultRouter()
@@ -49,4 +51,11 @@ urlpatterns = [
     # İstek Geri Çekme (YENİ)
     path('istekler/<int:pk>/geri-cek/', VardiyaIstegiGeriCekView.as_view(), name='takas-istek-geri-cek'),
     path('iptal-istekleri/<int:pk>/geri-cek/', VardiyaIptalIstegiGeriCekView.as_view(), name='iptal-istek-geri-cek'),
+    
+    # QR Kod ile Vardiya Kontrol
+    path('vardiyalar/<int:vardiya_id>/kontrol/', VardiyaBaslatBitirView.as_view(), name='vardiya-kontrol'),
+    
+    # Admin İstatistikler
+    path('admin/istatistikler/', AdminIstatistiklerView.as_view(), name='admin-istatistikler'),
+
 ]

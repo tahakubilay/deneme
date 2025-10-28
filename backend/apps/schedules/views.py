@@ -4,7 +4,13 @@ from django.db.models import Q
 from django.db import transaction
 from django.core.management import call_command
 from django.http import JsonResponse
-from datetime import datetime, timedelta
+from datetime import datetime
+from django.utils import timezone
+from django.db.models import Count, Avg, Sum, Q, F
+from django.db.models.functions import TruncMonth
+import secrets
+from datetime import timedelta
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -19,6 +25,156 @@ from .serializers import (
     KisitlamaKuraliSerializer
 )
 from .choices import IstekTipi, IstekDurum, VardiyaDurum, Gunler, MusaitlikDurum
+
+class VardiyaBaslatBitirView(APIView):
+    """QR kod ile vardiya başlatma/bitirme"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, vardiya_id, *args, **kwargs):
+        action = request.data.get('action')  # 'baslat' veya 'bitir'
+        qr_token = request.data.get('qr_token')  # Şube QR kodundan gelen token
+        
+        try:
+            vardiya = Vardiya.objects.get(id=vardiya_id, calisan=request.user)
+        except Vardiya.DoesNotExist:
+            return Response({'hata': 'Vardiya bulunamadı.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # QR token kontrolü (şube ile eşleşmeli)
+        expected_token = f"sube_{vardiya.sube.id}_qr"
+        if qr_token != expected_token:
+            return Response({'hata': 'QR kod şube ile eşleşmiyor!'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        now = timezone.now()
+        
+        if action == 'baslat':
+            if vardiya.durum != VardiyaDurum.PLANLANDI:
+                return Response({'hata': 'Bu vardiya başlatılamaz.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 15 dakika erken başlatmaya izin ver
+            if now < vardiya.baslangic_zamani - timedelta(minutes=15):
+                return Response({'hata': 'Vardiya başlama saati henüz gelmedi.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            vardiya.gercek_baslangic_zamani = now
+            vardiya.durum = VardiyaDurum.BASLATILDI
+            vardiya.save()
+            
+            return Response({
+                'mesaj': 'Vardiya başarıyla başlatıldı!',
+                'baslangic_zamani': vardiya.gercek_baslangic_zamani
+            })
+        
+        elif action == 'bitir':
+            if vardiya.durum != VardiyaDurum.BASLATILDI:
+                return Response({'hata': 'Vardiya henüz başlatılmadı.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            vardiya.gercek_bitis_zamani = now
+            vardiya.durum = VardiyaDurum.TAMAMLANDI
+            vardiya.save()
+            
+            # Çalışılan süreyi hesapla
+            calisilan_sure = (vardiya.gercek_bitis_zamani - vardiya.gercek_baslangic_zamani).total_seconds() / 3600
+            
+            return Response({
+                'mesaj': 'Vardiya başarıyla tamamlandı!',
+                'bitis_zamani': vardiya.gercek_bitis_zamani,
+                'calisilan_sure': round(calisilan_sure, 2)
+            })
+        
+        return Response({'hata': 'Geçersiz işlem.'}, status=status.HTTP_400_BAD_REQUEST)
+
+class ProfilView(APIView):
+    """Çalışan profil görüntüleme ve düzenleme talebi"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        serializer = CustomUserSerializer(user)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Profil güncelleme talebi oluştur"""
+        user = request.user
+        
+        # Bekleyen talep var mı kontrol et
+        bekleyen_talep = ProfilGuncellemeTalebi.objects.filter(
+            calisan=user,
+            durum='beklemede'
+        ).exists()
+        
+        if bekleyen_talep:
+            return Response(
+                {'hata': 'Zaten beklemede olan bir güncelleme talebiniz var.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Yeni talep oluştur
+        talep = ProfilGuncellemeTalebi.objects.create(
+            calisan=user,
+            yeni_telefon=request.data.get('telefon'),
+            yeni_adres=request.data.get('adres'),
+            yeni_profil_resmi=request.FILES.get('profil_resmi')
+        )
+        
+        return Response({
+            'mesaj': 'Profil güncelleme talebiniz yönetici onayına gönderildi.',
+            'talep_id': talep.id
+        }, status=status.HTTP_201_CREATED)
+
+
+class AdminProfilOnayView(APIView):
+    """Admin için profil güncelleme taleplerini yönetme"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Bekleyen talepleri listele"""
+        talepler = ProfilGuncellemeTalebi.objects.filter(
+            durum='beklemede'
+        ).select_related('calisan')
+        
+        data = [{
+            'id': t.id,
+            'calisan': f"{t.calisan.first_name} {t.calisan.last_name}",
+            'calisan_id': t.calisan.id,
+            'yeni_telefon': t.yeni_telefon,
+            'yeni_adres': t.yeni_adres,
+            'profil_resmi_var': bool(t.yeni_profil_resmi),
+            'olusturma_tarihi': t.olusturma_tarihi
+        } for t in talepler]
+        
+        return Response(data)
+    
+    def post(self, request, talep_id):
+        """Talebi onayla/reddet"""
+        try:
+            talep = ProfilGuncellemeTalebi.objects.get(id=talep_id)
+        except ProfilGuncellemeTalebi.DoesNotExist:
+            return Response({'hata': 'Talep bulunamadı.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        action = request.data.get('action')
+        
+        if action == 'onayla':
+            with transaction.atomic():
+                user = talep.calisan
+                
+                if talep.yeni_telefon:
+                    user.telefon = talep.yeni_telefon
+                if talep.yeni_adres:
+                    user.adres = talep.yeni_adres
+                if talep.yeni_profil_resmi:
+                    user.profil_resmi = talep.yeni_profil_resmi
+                
+                user.save()
+                talep.durum = 'onaylandi'
+                talep.save()
+            
+            return Response({'mesaj': 'Profil güncelleme talebi onaylandı ve uygulandı.'})
+        
+        elif action == 'reddet':
+            talep.durum = 'reddedildi'
+            talep.save()
+            return Response({'mesaj': 'Talep reddedildi.'})
+        
+        return Response({'hata': 'Geçersiz işlem.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CalisanTercihiViewSet(viewsets.ModelViewSet):
@@ -319,3 +475,121 @@ class KendiIptalIsteklerimListView(generics.ListAPIView):
 
     def get_queryset(self):
         return VardiyaIptalIstegi.objects.filter(istek_yapan=self.request.user).order_by('-olusturulma_tarihi')
+
+class AdminIstatistiklerView(APIView):
+    """Admin için detaylı istatistikler"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            # Tarih filtresi
+            baslangic = request.query_params.get('baslangic', 
+                (timezone.now() - timedelta(days=90)).strftime('%Y-%m-%d'))
+            bitis = request.query_params.get('bitis', 
+                timezone.now().strftime('%Y-%m-%d'))
+            
+            # 1. Genel İstatistikler
+            toplam_vardiya = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis]
+            ).count()
+            
+            tamamlanan_vardiya = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis],
+                durum=VardiyaDurum.TAMAMLANDI
+            ).count()
+            
+            iptal_edilen = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis],
+                durum=VardiyaDurum.IPTAL
+            ).count()
+            
+            # 2. Çalışan Performansı
+            calisan_performans_list = []
+            tamamlanan_vardiyalar = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis],
+                durum=VardiyaDurum.TAMAMLANDI,
+                gercek_baslangic_zamani__isnull=False,
+                gercek_bitis_zamani__isnull=False,
+                calisan__isnull=False
+            ).select_related('calisan')
+            
+            # Çalışan bazlı gruplama
+            from collections import defaultdict
+            calisan_data = defaultdict(lambda: {'toplam_vardiya': 0, 'toplam_saat': 0})
+            
+            for vardiya in tamamlanan_vardiyalar:
+                if vardiya.calisan:
+                    key = vardiya.calisan.id
+                    calisan_data[key]['calisan__id'] = vardiya.calisan.id
+                    calisan_data[key]['calisan__first_name'] = vardiya.calisan.first_name
+                    calisan_data[key]['calisan__last_name'] = vardiya.calisan.last_name
+                    calisan_data[key]['toplam_vardiya'] += 1
+                    
+                    # Süre hesaplama
+                    sure = (vardiya.gercek_bitis_zamani - vardiya.gercek_baslangic_zamani).total_seconds() / 3600
+                    calisan_data[key]['toplam_saat'] += sure
+            
+            calisan_performans = sorted(
+                calisan_data.values(), 
+                key=lambda x: x['toplam_saat'], 
+                reverse=True
+            )[:10]
+            
+            # 3. Şube Bazlı İstatistikler
+            sube_istatistik = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis]
+            ).values(
+                'sube__sube_adi',
+                'sube__id'
+            ).annotate(
+                toplam_vardiya=Count('id'),
+                tamamlanan=Count('id', filter=Q(durum=VardiyaDurum.TAMAMLANDI)),
+                iptal=Count('id', filter=Q(durum=VardiyaDurum.IPTAL))
+            )
+            
+            # 4. Aylık Trend
+            aylik_trend = Vardiya.objects.filter(
+                baslangic_zamani__range=[baslangic, bitis]
+            ).annotate(
+                ay=TruncMonth('baslangic_zamani')
+            ).values('ay').annotate(
+                toplam=Count('id'),
+                tamamlanan=Count('id', filter=Q(durum=VardiyaDurum.TAMAMLANDI))
+            ).order_by('ay')
+            
+            # 5. Takas/İptal İstatistikleri
+            bekleyen_takas = VardiyaIstegi.objects.filter(
+                durum__in=[IstekDurum.HEDEF_ONAYI_BEKLIYOR, IstekDurum.ADMIN_ONAYI_BEKLIYOR]
+            ).count()
+            
+            bekleyen_iptal = VardiyaIptalIstegi.objects.filter(
+                durum=IstekDurum.ADMIN_ONAYI_BEKLIYOR
+            ).count()
+            
+            # Tamamlanma oranı hesaplama
+            tamamlanma_orani = round((tamamlanan_vardiya / toplam_vardiya * 100) if toplam_vardiya > 0 else 0, 2)
+            
+            return Response({
+                'genel': {
+                    'toplam_vardiya': toplam_vardiya,
+                    'tamamlanan_vardiya': tamamlanan_vardiya,
+                    'iptal_edilen': iptal_edilen,
+                    'tamamlanma_orani': tamamlanma_orani
+                },
+                'calisan_performans': calisan_performans,
+                'sube_istatistik': list(sube_istatistik),
+                'aylik_trend': list(aylik_trend),
+                'bekleyen_islemler': {
+                    'takas': bekleyen_takas,
+                    'iptal': bekleyen_iptal
+                }
+            })
+        
+        except Exception as e:
+            import traceback
+            print("İstatistik Hatası:", str(e))
+            print(traceback.format_exc())
+            return Response(
+                {'hata': f'İstatistikler yüklenirken hata oluştu: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
