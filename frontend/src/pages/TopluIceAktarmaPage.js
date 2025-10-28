@@ -88,6 +88,7 @@ function TopluIceAktarmaPage() {
             .finally(() => setLoading(false));
     };
 
+    
     const handleCalisanSelect = (id) => {
         setSelectedCalisanlar(prev => 
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
