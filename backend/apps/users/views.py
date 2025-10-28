@@ -1,5 +1,7 @@
 # backend/apps/users/views.py - TAMAMI
 
+from rest_framework.parsers import MultiPartParser
+import pandas as pd
 from rest_framework import viewsets, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7,6 +9,8 @@ from rest_framework import status
 from django.db import transaction
 from .models import CustomUser, ProfilGuncellemeTalebi
 from .serializers import CustomUserSerializer
+import pandas as pd
+from rest_framework.parsers import MultiPartParser
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -36,6 +40,22 @@ class ProfilView(APIView):
     def post(self, request):
         user = request.user
         
+        # ADMIN İSE DOĞRUDAN GÜNCELLENSİN
+        if user.is_staff:
+            if request.data.get('telefon'):
+                user.telefon = request.data.get('telefon')
+            if request.data.get('adres'):
+                user.adres = request.data.get('adres')
+            if request.FILES.get('profil_resmi'):
+                user.profil_resmi = request.FILES.get('profil_resmi')
+            
+            user.save()
+            
+            return Response({
+                'mesaj': 'Profil başarıyla güncellendi.',
+            }, status=status.HTTP_200_OK)
+        
+        # ÇALIŞAN İSE ONAY SÜRECİ
         # Bekleyen talep var mı kontrol et
         bekleyen_talep = ProfilGuncellemeTalebi.objects.filter(
             calisan=user,
@@ -116,3 +136,68 @@ class AdminProfilOnayView(APIView):
             return Response({'mesaj': 'Talep reddedildi.'})
         
         return Response({'hata': 'Geçersiz işlem.'}, status=status.HTTP_400_BAD_REQUEST)
+class TopluCalisanIceAktarView(APIView):
+    """Excel'den toplu çalışan içe aktarma"""
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser]
+    
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'hata': 'Dosya bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Excel'i oku
+            df = pd.read_excel(file)
+            df = df.where(pd.notnull(df), None)
+            
+            eklenen = 0
+            guncellenen = 0
+            hatalar = []
+            
+            for index, row in df.iterrows():
+                username = row.get('username')
+                if not username:
+                    hatalar.append(f"Satır {index + 2}: username boş")
+                    continue
+                
+                try:
+                    user, created = CustomUser.objects.update_or_create(
+                        username=username,
+                        defaults={
+                            'first_name': row.get('first_name', ''),
+                            'last_name': row.get('last_name', ''),
+                            'email': row.get('email', f'{username}@example.com'),
+                            'telefon': str(row.get('telefon', '')),
+                            'adres': row.get('adres', ''),
+                            'enlem': row.get('enlem'),
+                            'boylam': row.get('boylam'),
+                            'cinsiyet': row.get('cinsiyet'),
+                            'rol': 'calisan',
+                            'is_staff': False,
+                            'is_superuser': False,
+                        }
+                    )
+                    
+                    if created:
+                        user.set_password('VardiyaSifre123')
+                        user.save()
+                        eklenen += 1
+                    else:
+                        guncellenen += 1
+                        
+                except Exception as e:
+                    hatalar.append(f"Satır {index + 2}: {str(e)}")
+            
+            return Response({
+                'mesaj': f'{eklenen} çalışan eklendi, {guncellenen} çalışan güncellendi.',
+                'eklenen': eklenen,
+                'guncellenen': guncellenen,
+                'hatalar': hatalar
+            })
+            
+        except Exception as e:
+            return Response(
+                {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -19,6 +19,7 @@ import VardiyaKontrolPage from './pages/VardiyaKontrolPage';
 import IstatistiklerPage from './pages/IstatistiklerPage';
 import ProfilPage from './pages/ProfilPage';
 import AdminProfilOnayPage from './pages/AdminProfilOnayPage';
+import TopluIceAktarmaPage from './pages/TopluAktarmaPage';
 
 
 // Bileşenlerimizi import ediyoruz
@@ -76,6 +77,11 @@ function App() {
             <Route path="/profil" element={<ProfilPage />} />
             <Route path="/admin/istatistikler" element={<IstatistiklerPage />} />
             <Route path="/admin/profil-onaylari" element={<AdminProfilOnayPage />} />
+            <Route path="/admin/toplu-ice-aktar" element={<TopluIceAktarmaPage />} />
+            <Route path="/vardiya-kontrol" element={<VardiyaKontrolPage />} />
+            <Route path="/profil" element={<ProfilPage />} />
+            <Route path="/admin/istatistikler" element={<IstatistiklerPage />} />
+
 
           </Routes>
         </main>

@@ -13,10 +13,15 @@ import {
     ToggleButton, ToggleButtonGroup, Dialog, DialogTitle, DialogContent, 
     DialogActions, Chip, Grid, Card, CardContent, Divider, IconButton, Tooltip
 } from '@mui/material';
-import { 
-    CalendarMonth, ViewWeek, FilterList, TrendingUp, 
-    Refresh, FileDownload 
-} from '@mui/icons-material';
+import { FileDownload } from '@mui/icons-material';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { Refresh } from '@mui/icons-material';
+import { CalendarMonth } from '@mui/icons-material';
+import { ViewWeek } from '@mui/icons-material';
+import { FilterList } from '@mui/icons-material';
+
+
 
 moment.locale('tr');
 const localizer = momentLocalizer(moment);

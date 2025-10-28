@@ -10,7 +10,8 @@ from django.db.models import Count, Avg, Sum, Q, F
 from django.db.models.functions import TruncMonth
 import secrets
 from datetime import timedelta
-
+from rest_framework.parsers import MultiPartParser
+import pandas as pd
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -591,5 +592,80 @@ class AdminIstatistiklerView(APIView):
             print(traceback.format_exc())
             return Response(
                 {'hata': f'İstatistikler yüklenirken hata oluştu: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+class TopluMusaitlikIceAktarView(APIView):
+    """Excel'den toplu müsaitlik içe aktarma"""
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser]
+    
+    def post(self, request):
+        file = request.FILES.get('file')
+        donem = request.query_params.get('donem')
+        
+        if not file:
+            return Response({'hata': 'Dosya bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not donem:
+            return Response({'hata': 'Dönem parametresi gerekli (YYYY-MM).'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from apps.users.models import CustomUser
+            
+            df = pd.read_excel(file)
+            df = df.where(pd.notnull(df), None)
+            
+            gun_map = {
+                'pazartesi': 1, 'sali': 2, 'carsamba': 3, 'persembe': 4,
+                'cuma': 5, 'cumartesi': 6, 'pazar': 7
+            }
+            
+            gecerli_durumlar = MusaitlikDurum.values
+            
+            eklenen = 0
+            hatalar = []
+            
+            for index, row in df.iterrows():
+                username = row.get('username')
+                if not username:
+                    continue
+                
+                try:
+                    calisan = CustomUser.objects.get(username=username)
+                except CustomUser.DoesNotExist:
+                    hatalar.append(f"'{username}' bulunamadı")
+                    continue
+                
+                # Önce mevcut müsaitlikleri sil
+                Musaitlik.objects.filter(calisan=calisan, donem=donem).delete()
+                
+                # Yeni müsaitlikleri ekle
+                for gun_str, gun_numarasi in gun_map.items():
+                    durum = row.get(gun_str)
+                    if durum and durum in gecerli_durumlar:
+                        Musaitlik.objects.create(
+                            calisan=calisan,
+                            gun=gun_numarasi,
+                            musaitlik_durumu=durum,
+                            donem=donem
+                        )
+                        eklenen += 1
+                    else:
+                        Musaitlik.objects.create(
+                            calisan=calisan,
+                            gun=gun_numarasi,
+                            musaitlik_durumu=MusaitlikDurum.MUSAIT_DEGIL,
+                            donem=donem
+                        )
+            
+            return Response({
+                'mesaj': f'{donem} dönemi için {eklenen} müsaitlik kaydı eklendi.',
+                'eklenen': eklenen,
+                'hatalar': hatalar
+            })
+            
+        except Exception as e:
+            return Response(
+                {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

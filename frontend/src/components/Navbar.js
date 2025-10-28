@@ -1,5 +1,3 @@
-// src/components/Navbar.js - GELİŞTİRİLMİŞ VERSİYON
-
 import React, { useState, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -12,8 +10,6 @@ import {
     SwapHoriz, AdminPanelSettings, Settings, Logout, Person,
     QrCode2, BarChart, Favorite, AccessTime, Rule
 } from '@mui/icons-material';
-
-import { Person as PersonIcon } from '@mui/icons-material';
 
 function Navbar() {
     const navigate = useNavigate();
@@ -68,11 +64,10 @@ function Navbar() {
 
     const adminMenuItems = [
         { text: 'İstatistikler', path: '/admin/istatistikler', icon: <BarChart /> },
-    { text: 'Onaylar', path: '/admin/onaylar', icon: <AdminPanelSettings /> },
-    { text: 'Profil Onayları', path: '/admin/profil-onaylari', icon: <PersonIcon /> }, // YENİ
-    { text: 'Favori Atama', path: '/tercihler', icon: <Favorite /> },
-    { text: 'Çalışma Saatleri', path: '/sube-saatleri', icon: <AccessTime /> },
-    { text: 'Kurallar', path: '/kisitlama-kurallari', icon: <Rule /> },
+        { text: 'Onaylar', path: '/admin/onaylar', icon: <AdminPanelSettings /> },
+        { text: 'Favori Atama', path: '/tercihler', icon: <Favorite /> },
+        { text: 'Çalışma Saatleri', path: '/sube-saatleri', icon: <AccessTime /> },
+        { text: 'Kurallar', path: '/kisitlama-kurallari', icon: <Rule /> },
     ];
 
     const commonMenuItems = [

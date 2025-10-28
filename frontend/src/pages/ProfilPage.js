@@ -94,7 +94,13 @@ function ProfilPage() {
             setEditMode(false);
             setSelectedImage(null);
             setImagePreview(null);
-            fetchUserProfile();
+            fetchUserProfile(); // Profili yenile
+            
+            // LocalStorage'daki kullanıcıyı güncelle (admin ise)
+            if (user.is_staff) {
+                const updatedUser = { ...user, telefon: editedData.telefon, adres: editedData.adres };
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            }
         })
         .catch(err => {
             console.error("Güncelleme hatası:", err);
