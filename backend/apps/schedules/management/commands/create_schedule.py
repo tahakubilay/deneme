@@ -346,7 +346,7 @@ class Command(BaseCommand):
             calisan=calisan, 
             baslangic_zamani=baslangic, 
             bitis_zamani=bitis, 
-            durum='taslak'
+            durum='planlandi'
         )
         
         # Saat hesaplamaları

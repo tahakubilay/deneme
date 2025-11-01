@@ -1,19 +1,17 @@
-// src/pages/UserListPage.js
+// frontend/src/pages/UserListPage.js - GELİŞTİRİLMİŞ
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-
-// --- MUI Bileşenlerini ve İkonları Import Ediyoruz ---
 import {
     Container, Typography, Box, Alert, 
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton,
-    Modal, Fade, Backdrop, TextField, Button, Select, MenuItem, FormControl, InputLabel
+    Modal, Fade, Backdrop, TextField, Button, Select, MenuItem, FormControl, InputLabel,
+    Checkbox, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-// ----------------------------------------------------
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
-// Modal için stil objesi
 const modalStyle = {
     position: 'absolute',
     top: '50%',
@@ -28,31 +26,19 @@ const modalStyle = {
 
 function UserListPage() {
     const [kullanicilar, setKullanicilar] = useState([]);
+    const [selectedUsers, setSelectedUsers] = useState([]); // YENİ
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
-
-    // --- DÜZENLEME MODALI STATE'LERİ ---
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false); // YENİ
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [editedData, setEditedData] = useState({});
-    // -------------------------------------
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('accessToken');
         return { headers: { 'Authorization': `Bearer ${token}` } };
-    };
-
-    const fetchKullanicilar = () => {
-        // URL'den /liste/ kaldırıldı
-        axios.get('http://127.0.0.1:8000/api/kullanicilar/', getAuthHeaders())
-        .then(response => {
-            setKullanicilar(response.data);
-        })
-        .catch(error => {
-            console.error("Kullanıcı verisi çekilirken hata!", error);
-            setError("Kullanıcı listesi yüklenemedi.");
-        });
     };
 
     useEffect(() => {
@@ -65,11 +51,89 @@ function UserListPage() {
         fetchKullanicilar();
     }, []);
 
-    // --- SİLME FONKSİYONU ---
+    const fetchKullanicilar = () => {
+        axios.get('http://127.0.0.1:8000/api/kullanicilar/', getAuthHeaders())
+        .then(response => {
+            setKullanicilar(response.data);
+        })
+        .catch(error => {
+            console.error("Kullanıcı verisi çekilirken hata!", error);
+            setError("Kullanıcı listesi yüklenemedi.");
+        });
+    };
+
+    const handleUserSelect = (userId) => {
+        setSelectedUsers(prev => 
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
+    const handleSelectAll = (event) => {
+        if (event.target.checked) {
+            setSelectedUsers(kullanicilar.filter(u => !u.is_staff).map(u => u.id));
+        } else {
+            setSelectedUsers([]);
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedUsers.length === 0) return;
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmBulkDelete = () => {
+        setError('');
+        setSuccess('');
+        
+        const promises = selectedUsers.map(userId => 
+            axios.delete(`http://127.0.0.1:8000/api/kullanicilar/${userId}/`, getAuthHeaders())
+        );
+
+        Promise.all(promises)
+            .then(() => {
+                setSuccess(`${selectedUsers.length} kullanıcı başarıyla silindi.`);
+                setSelectedUsers([]);
+                fetchKullanicilar();
+            })
+            .catch(err => {
+                console.error("Toplu silme hatası!", err);
+                setError("Bazı kullanıcılar silinemedi.");
+            })
+            .finally(() => {
+                setDeleteDialogOpen(false);
+            });
+    };
+
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        setError('');
+        setSuccess('');
+
+        axios.post('http://127.0.0.1:8000/api/kullanicilar/toplu-ice-aktar/', formData, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        })
+        .then(response => {
+            setSuccess(response.data.mesaj || 'Toplu içe aktarma başarılı!');
+            fetchKullanicilar();
+            event.target.value = '';
+        })
+        .catch(err => {
+            console.error("İçe aktarma hatası:", err);
+            setError(err.response?.data?.hata || 'İçe aktarma başarısız oldu.');
+        });
+    };
+
     const handleDelete = (userId) => {
-        if (window.confirm("Bu kullanıcıyı kalıcı olarak silmek istediğinizden emin misiniz?")) {
+        if (window.confirm("Bu kullanıcıyı silmek istediğinizden emin misiniz?")) {
             setError(''); setSuccess('');
-            // URL'den /liste/ kaldırıldı
             axios.delete(`http://127.0.0.1:8000/api/kullanicilar/${userId}/`, getAuthHeaders())
                 .then(() => {
                     setSuccess("Kullanıcı başarıyla silindi.");
@@ -81,12 +145,10 @@ function UserListPage() {
                 });
         }
     };
-    // ------------------------
 
-    // --- DÜZENLEME FONKSİYONLARI ---
     const handleEditClick = (user) => {
         setEditingUser(user);
-        setEditedData({ ...user }); // Düzenlenecek veriyi state'e kopyala
+        setEditedData({ ...user });
         setIsModalOpen(true);
     };
 
@@ -102,7 +164,6 @@ function UserListPage() {
 
     const handleSaveChanges = () => {
         setError(''); setSuccess('');
-        // URL'den /liste/ kaldırıldı
         axios.patch(`http://127.0.0.1:8000/api/kullanicilar/${editingUser.id}/`, editedData, getAuthHeaders())
             .then(() => {
                 setSuccess("Kullanıcı bilgileri başarıyla güncellendi.");
@@ -114,13 +175,43 @@ function UserListPage() {
                 setError(JSON.stringify(error.response?.data) || "Güncelleme sırasında bir hata oluştu.");
             });
     };
-    // -----------------------------
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4 }}>
-            <Typography component="h1" variant="h4" gutterBottom>
-                Kullanıcı Yönetimi
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography component="h1" variant="h4">
+                    Kullanıcı Yönetimi
+                </Typography>
+
+                {currentUser && currentUser.is_staff && (
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                            variant="contained"
+                            component="label"
+                            startIcon={<CloudUploadIcon />}
+                            color="primary"
+                        >
+                            Excel'den Ekle
+                            <input
+                                hidden
+                                accept=".xlsx,.xls"
+                                type="file"
+                                onChange={handleFileUpload}
+                            />
+                        </Button>
+
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            startIcon={<DeleteIcon />}
+                            disabled={selectedUsers.length === 0}
+                            onClick={handleBulkDelete}
+                        >
+                            Seçilenleri Sil ({selectedUsers.length})
+                        </Button>
+                    </Box>
+                )}
+            </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
@@ -129,6 +220,15 @@ function UserListPage() {
                 <Table>
                     <TableHead>
                         <TableRow>
+                            {currentUser && currentUser.is_staff && (
+                                <TableCell padding="checkbox">
+                                    <Checkbox
+                                        indeterminate={selectedUsers.length > 0 && selectedUsers.length < kullanicilar.filter(u => !u.is_staff).length}
+                                        checked={kullanicilar.filter(u => !u.is_staff).length > 0 && selectedUsers.length === kullanicilar.filter(u => !u.is_staff).length}
+                                        onChange={handleSelectAll}
+                                    />
+                                </TableCell>
+                            )}
                             <TableCell>Ad Soyad</TableCell>
                             <TableCell>Kullanıcı Adı</TableCell>
                             <TableCell>E-posta</TableCell>
@@ -142,6 +242,15 @@ function UserListPage() {
                     <TableBody>
                         {kullanicilar.map(user => (
                             <TableRow key={user.id}>
+                                {currentUser && currentUser.is_staff && (
+                                    <TableCell padding="checkbox">
+                                        <Checkbox
+                                            checked={selectedUsers.includes(user.id)}
+                                            onChange={() => handleUserSelect(user.id)}
+                                            disabled={user.is_staff}
+                                        />
+                                    </TableCell>
+                                )}
                                 <TableCell>{user.first_name} {user.last_name}</TableCell>
                                 <TableCell>{user.username}</TableCell>
                                 <TableCell>{user.email}</TableCell>
@@ -149,10 +258,10 @@ function UserListPage() {
                                 <TableCell>{user.telefon}</TableCell>
                                 {currentUser && currentUser.is_staff && (
                                     <TableCell align="right">
-                                        <IconButton color="primary" onClick={() => handleEditClick(user)}>
+                                        <IconButton onClick={() => handleEditClick(user)} color="primary">
                                             <EditIcon />
                                         </IconButton>
-                                        <IconButton color="error" onClick={() => handleDelete(user.id)}>
+                                        <IconButton onClick={() => handleDelete(user.id)} color="error">
                                             <DeleteIcon />
                                         </IconButton>
                                     </TableCell>
@@ -163,7 +272,7 @@ function UserListPage() {
                 </Table>
             </TableContainer>
 
-            {/* DÜZENLEME MODALI */}
+            {/* Düzenleme Modalı */}
             <Modal
                 open={isModalOpen}
                 onClose={handleModalClose}
@@ -180,14 +289,8 @@ function UserListPage() {
                                 <TextField label="Soyad" name="last_name" value={editedData.last_name || ''} onChange={handleInputChange} fullWidth sx={{ mb: 2 }}/>
                                 <TextField label="E-posta" name="email" type="email" value={editedData.email || ''} onChange={handleInputChange} fullWidth sx={{ mb: 2 }}/>
                                 <FormControl fullWidth sx={{ mb: 2 }}>
-                                    <InputLabel id="rol-select-label">Rol</InputLabel>
-                                    <Select
-                                        labelId="rol-select-label"
-                                        name="rol"
-                                        value={editedData.rol || ''}
-                                        label="Rol"
-                                        onChange={handleInputChange}
-                                    >
+                                    <InputLabel>Rol</InputLabel>
+                                    <Select name="rol" value={editedData.rol || ''} label="Rol" onChange={handleInputChange}>
                                         <MenuItem value="admin">Admin</MenuItem>
                                         <MenuItem value="calisan">Çalışan</MenuItem>
                                     </Select>
@@ -195,13 +298,32 @@ function UserListPage() {
                                 <TextField label="Telefon" name="telefon" value={editedData.telefon || ''} onChange={handleInputChange} fullWidth />
                                 <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                                     <Button onClick={handleModalClose} sx={{ mr: 1 }}>İptal</Button>
-                                    <Button variant="contained" onClick={handleSaveChanges}>Değişiklikleri Kaydet</Button>
+                                    <Button variant="contained" onClick={handleSaveChanges}>Kaydet</Button>
                                 </Box>
                             </Box>
                         )}
                     </Box>
                 </Fade>
             </Modal>
+
+            {/* Silme Onay Dialogu */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                <DialogTitle>Toplu Silme Onayı</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        {selectedUsers.length} kullanıcıyı silmek istediğinizden emin misiniz?
+                    </Typography>
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                        Bu işlem geri alınamaz!
+                    </Alert>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>İptal</Button>
+                    <Button onClick={confirmBulkDelete} color="error" variant="contained">
+                        Sil
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }

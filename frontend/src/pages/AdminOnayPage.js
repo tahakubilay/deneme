@@ -1,13 +1,12 @@
-// src/pages/AdminOnayPage.js
+// src/pages/AdminOnayPage.js - GÜNCELLENMİŞ
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     Container, Typography, Paper, List, ListItem, ListItemText, Button, Divider, Box, Chip, Alert, Tab, Tabs, 
-    Modal, Fade, Backdrop, Select, MenuItem, FormControl, InputLabel, CircularProgress
+    Modal, Fade, Backdrop, Select, MenuItem, FormControl, InputLabel, CircularProgress, Avatar, Grid
 } from '@mui/material';
 
-// Modal için stil
 const modalStyle = {
     position: 'absolute',
     top: '50%',
@@ -22,19 +21,18 @@ const modalStyle = {
 
 function AdminOnayPage() {
     const [takasIstekleri, setTakasIstekleri] = useState([]);
-    const [iptalIstekleri, setIptalIstekleri] = useState([]); // YENİ
+    const [iptalIstekleri, setIptalIstekleri] = useState([]);
+    const [profilTalepleri, setProfilTalepleri] = useState([]); // YENİ
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [tabValue, setTabValue] = useState(0);
 
-    // --- YENİ MODAL STATE'LERİ ---
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedIptalIstek, setSelectedIptalIstek] = useState(null);
-    const [modalStep, setModalStep] = useState('ask'); // 'ask' veya 'assign'
+    const [modalStep, setModalStep] = useState('ask');
     const [uygunCalisanlar, setUygunCalisanlar] = useState([]);
     const [selectedCalisanId, setSelectedCalisanId] = useState('');
     const [modalLoading, setModalLoading] = useState(false);
-    // ----------------------------
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('accessToken');
@@ -50,7 +48,6 @@ function AdminOnayPage() {
             });
     };
 
-    // --- YENİ: İptal isteklerini çeken fonksiyon ---
     const fetchIptalIstekleri = () => {
         axios.get('http://127.0.0.1:8000/api/schedules/admin/iptal-istekleri/', getAuthHeaders())
             .then(response => setIptalIstekleri(response.data))
@@ -60,9 +57,20 @@ function AdminOnayPage() {
             });
     };
 
+    // YENİ: Profil taleplerini çek
+    const fetchProfilTalepleri = () => {
+        axios.get('http://127.0.0.1:8000/api/kullanicilar/admin/profil-talepleri/', getAuthHeaders())
+            .then(response => setProfilTalepleri(response.data))
+            .catch(error => {
+                console.error("Profil talepleri çekilirken hata!", error);
+                setError('Profil talepleri yüklenemedi.');
+            });
+    };
+
     useEffect(() => {
         fetchTakasIstekleri();
         fetchIptalIstekleri();
+        fetchProfilTalepleri(); // YENİ
     }, []);
 
     const handleTakasAksiyon = (istekId, action) => {
@@ -70,7 +78,7 @@ function AdminOnayPage() {
         axios.post(`http://127.0.0.1:8000/api/schedules/admin/istekler/${istekId}/aksiyon/`, { action }, getAuthHeaders())
             .then(response => {
                 setSuccess(response.data.mesaj);
-                fetchTakasIstekleri(); // Listeyi yenile
+                fetchTakasIstekleri();
             })
             .catch(error => {
                 console.error("Takas aksiyonu gönderilirken hata!", error);
@@ -78,11 +86,10 @@ function AdminOnayPage() {
             });
     };
 
-    // --- YENİ: Modal'ı açan fonksiyon ---
     const handleOpenModal = (istek) => {
         setSelectedIptalIstek(istek);
         setIsModalOpen(true);
-        setModalStep('ask'); // İlk adıma resetle
+        setModalStep('ask');
         setUygunCalisanlar([]);
         setSelectedCalisanId('');
         setError('');
@@ -90,7 +97,6 @@ function AdminOnayPage() {
 
     const handleCloseModal = () => setIsModalOpen(false);
 
-    // --- YENİ: Modal içinde "Evet" butonuna basılınca ---
     const handleFindUygunCalisanlar = () => {
         setModalLoading(true);
         axios.get(`http://127.0.0.1:8000/api/schedules/vardiyalar/${selectedIptalIstek.vardiya.id}/uygun-calisanlar/`, getAuthHeaders())
@@ -105,7 +111,6 @@ function AdminOnayPage() {
             .finally(() => setModalLoading(false));
     };
 
-    // --- YENİ: İptal isteği için aksiyon alan ana fonksiyon ---
     const handleIptalAksiyon = (action, yeni_calisan_id = null) => {
         setError(''); setSuccess('');
         const payload = { action };
@@ -116,11 +121,25 @@ function AdminOnayPage() {
         axios.post(`http://127.0.0.1:8000/api/schedules/admin/iptal-istekleri/${selectedIptalIstek.id}/aksiyon/`, payload, getAuthHeaders())
             .then(response => {
                 setSuccess(response.data.mesaj);
-                fetchIptalIstekleri(); // Listeyi yenile
+                fetchIptalIstekleri();
                 handleCloseModal();
             })
             .catch(error => {
                 console.error("İptal aksiyonu gönderilirken hata!", error);
+                setError(error.response?.data?.hata || 'İşlem sırasında bir hata oluştu.');
+            });
+    };
+
+    // YENİ: Profil talebi işle
+    const handleProfilAksiyon = (talepId, action) => {
+        setError(''); setSuccess('');
+        axios.post(`http://127.0.0.1:8000/api/kullanicilar/admin/profil-talepleri/${talepId}/`, { action }, getAuthHeaders())
+            .then(response => {
+                setSuccess(response.data.mesaj);
+                fetchProfilTalepleri();
+            })
+            .catch(error => {
+                console.error("Profil aksiyonu gönderilirken hata!", error);
                 setError(error.response?.data?.hata || 'İşlem sırasında bir hata oluştu.');
             });
     };
@@ -135,13 +154,14 @@ function AdminOnayPage() {
             {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} aria-label="onay-tabs">
-                    <Tab label={`Takas İstekleri (${takasIstekleri.length})`} />
-                    <Tab label={`İptal İstekleri (${iptalIstekleri.length})`} />
+                <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
+                    <Tab label={`Takas (${takasIstekleri.length})`} />
+                    <Tab label={`İptal (${iptalIstekleri.length})`} />
+                    <Tab label={`Profil (${profilTalepleri.length})`} />
                 </Tabs>
             </Box>
 
-            {/* Takas İstekleri Paneli */}
+            {/* TAB 0: Takas */}
             {tabValue === 0 && (
                 <Paper sx={{ p: 2, mt: 2 }}>
                     <List>
@@ -164,7 +184,7 @@ function AdminOnayPage() {
                 </Paper>
             )}
 
-            {/* İptal İstekleri Paneli (YENİ) */}
+            {/* TAB 1: İptal */}
             {tabValue === 1 && (
                 <Paper sx={{ p: 2, mt: 2 }}>
                     <List>
@@ -187,7 +207,49 @@ function AdminOnayPage() {
                 </Paper>
             )}
 
-            {/* İptal Onay Modalı (YENİ) */}
+            {/* TAB 2: Profil Talepleri (YENİ) */}
+            {tabValue === 2 && (
+                <Paper sx={{ p: 2, mt: 2 }}>
+                    <List>
+                        {profilTalepleri.length > 0 ? profilTalepleri.map((talep, index) => (
+                            <React.Fragment key={talep.id}>
+                                <ListItem>
+                                    <Grid container spacing={2} alignItems="center">
+                                        <Grid item>
+                                            <Avatar>{talep.calisan.charAt(0)}</Avatar>
+                                        </Grid>
+                                        <Grid item xs>
+                                            <ListItemText 
+                                                primary={talep.calisan}
+                                                secondary={
+                                                    <>
+                                                        {talep.yeni_telefon && `Telefon: ${talep.yeni_telefon} | `}
+                                                        {talep.yeni_adres && `Adres değişikliği | `}
+                                                        {talep.profil_resmi_var && `Profil resmi`}
+                                                    </>
+                                                }
+                                            />
+                                        </Grid>
+                                        <Grid item>
+                                            <Box>
+                                                <Button variant="contained" color="success" sx={{ mr: 1 }} onClick={() => handleProfilAksiyon(talep.id, 'onayla')}>
+                                                    Onayla
+                                                </Button>
+                                                <Button variant="contained" color="error" onClick={() => handleProfilAksiyon(talep.id, 'reddet')}>
+                                                    Reddet
+                                                </Button>
+                                            </Box>
+                                        </Grid>
+                                    </Grid>
+                                </ListItem>
+                                {index < profilTalepleri.length - 1 && <Divider />}
+                            </React.Fragment>
+                        )) : <Typography>Onay bekleyen profil talebi yok.</Typography>}
+                    </List>
+                </Paper>
+            )}
+
+            {/* İptal Onay Modalı */}
             <Modal open={isModalOpen} onClose={handleCloseModal} closeAfterTransition BackdropComponent={Backdrop} BackdropProps={{ timeout: 500 }}>
                 <Fade in={isModalOpen}>
                     <Box sx={modalStyle}>
@@ -236,7 +298,6 @@ function AdminOnayPage() {
                     </Box>
                 </Fade>
             </Modal>
-
         </Container>
     );
 }
