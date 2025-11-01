@@ -1,3 +1,5 @@
+// frontend/src/components/Navbar.js - Avatar Düzeltmesi
+
 import React, { useState, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -10,6 +12,7 @@ import {
     SwapHoriz, AdminPanelSettings, Settings, Logout, Person,
     QrCode2, BarChart, Favorite, AccessTime, Rule
 } from '@mui/icons-material';
+import axios from 'axios';
 
 function Navbar() {
     const navigate = useNavigate();
@@ -18,14 +21,32 @@ function Navbar() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     
     const [currentUser, setCurrentUser] = useState(null);
+    const [profilResmi, setProfilResmi] = useState(null); // ← YENİ
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
+
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('accessToken');
+        return { headers: { 'Authorization': `Bearer ${token}` } };
+    };
 
     useEffect(() => {
         const userString = localStorage.getItem('currentUser');
         if (userString) {
             try {
-                setCurrentUser(JSON.parse(userString));
+                const user = JSON.parse(userString);
+                setCurrentUser(user);
+                
+                // Profil resmini API'den çek
+                axios.get('http://127.0.0.1:8000/api/kullanicilar/profil/', getAuthHeaders())
+                    .then(response => {
+                        if (response.data.profil_resmi_url) {
+                            setProfilResmi(response.data.profil_resmi_url);
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Profil resmi alınamadı:", error);
+                    });
             } catch (e) { 
                 console.error("Kullanıcı bilgisi okunurken hata:", e); 
             }
@@ -54,7 +75,6 @@ function Navbar() {
 
     const isActive = (path) => location.pathname === path;
 
-    // Menü öğeleri
     const employeeMenuItems = [
         { text: 'Vardiya Kontrol', path: '/vardiya-kontrol', icon: <QrCode2 /> },
         { text: 'Vardiyalarım', path: '/vardiyalarim', icon: <Schedule /> },
@@ -134,8 +154,11 @@ function Navbar() {
                 onClick={handleProfileMenuOpen}
                 sx={{ ml: 2 }}
             >
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
-                    {currentUser.first_name?.[0]}{currentUser.last_name?.[0]}
+                <Avatar 
+                    src={profilResmi || undefined}  /* ← BURADA DEĞİŞİKLİK */
+                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}
+                >
+                    {!profilResmi && `${currentUser.first_name?.[0]}${currentUser.last_name?.[0]}`}
                 </Avatar>
             </IconButton>
         </Box>
@@ -151,8 +174,11 @@ function Navbar() {
             <Box sx={{ width: 250, pt: 2 }}>
                 <Box sx={{ px: 2, mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>
-                            {currentUser.first_name?.[0]}{currentUser.last_name?.[0]}
+                        <Avatar 
+                            src={profilResmi || undefined}  /* ← BURADA DEĞİŞİKLİK */
+                            sx={{ bgcolor: 'primary.main' }}
+                        >
+                            {!profilResmi && `${currentUser.first_name?.[0]}${currentUser.last_name?.[0]}`}
                         </Avatar>
                         <Box>
                             <Typography variant="subtitle2" fontWeight="bold">
@@ -289,12 +315,22 @@ function Navbar() {
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
                 <Box sx={{ px: 2, py: 1, minWidth: 200 }}>
-                    <Typography variant="subtitle2" fontWeight="bold">
-                        {currentUser.first_name} {currentUser.last_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        {currentUser.email}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                        <Avatar 
+                            src={profilResmi || undefined}  /* ← BURADA DEĞİŞİKLİK */
+                            sx={{ width: 48, height: 48, bgcolor: 'primary.main' }}
+                        >
+                            {!profilResmi && `${currentUser.first_name?.[0]}${currentUser.last_name?.[0]}`}
+                        </Avatar>
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight="bold">
+                                {currentUser.first_name} {currentUser.last_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {currentUser.email}
+                            </Typography>
+                        </Box>
+                    </Box>
                 </Box>
                 <Divider />
                 <MenuItem 

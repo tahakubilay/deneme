@@ -7,6 +7,8 @@ from rest_framework import status
 from django.db import transaction
 from .models import CustomUser, ProfilGuncellemeTalebi
 from .serializers import CustomUserSerializer
+from rest_framework.parsers import MultiPartParser, FormParser
+import pandas as pd
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -52,7 +54,6 @@ class ProfilView(APIView):
             }, status=status.HTTP_200_OK)
         
         # ÇALIŞAN İSE ONAY SÜRECİ
-        # Bekleyen talep var mı kontrol et
         bekleyen_talep = ProfilGuncellemeTalebi.objects.filter(
             calisan=user,
             durum='beklemede'
@@ -64,11 +65,14 @@ class ProfilView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Yeni talep oluştur
+        # YENİ: Eski değerleri kaydet
         talep = ProfilGuncellemeTalebi.objects.create(
             calisan=user,
+            eski_telefon=user.telefon,  # ← ESKİ DEĞER
             yeni_telefon=request.data.get('telefon'),
+            eski_adres=user.adres,  # ← ESKİ DEĞER
             yeni_adres=request.data.get('adres'),
+            eski_profil_resmi=user.profil_resmi,  # ← ESKİ DEĞER
             yeni_profil_resmi=request.FILES.get('profil_resmi')
         )
         
@@ -76,7 +80,6 @@ class ProfilView(APIView):
             'mesaj': 'Profil güncelleme talebiniz yönetici onayına gönderildi.',
             'talep_id': talep.id
         }, status=status.HTTP_201_CREATED)
-
 
 class ProfilTalebiView(APIView):
     """Çalışanın bekleyen profil talebini getir"""
@@ -98,6 +101,27 @@ class ProfilTalebiView(APIView):
         except ProfilGuncellemeTalebi.DoesNotExist:
             return Response({'hata': 'Bekleyen talep yok.'}, status=status.HTTP_404_NOT_FOUND)
 
+class ProfilGecmisiView(APIView):
+    """Kullanıcının profil güncelleme geçmişi"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        talepler = ProfilGuncellemeTalebi.objects.filter(
+            calisan=request.user
+        ).order_by('-olusturma_tarihi')
+        
+        data = [{
+            'id': t.id,
+            'durum': t.durum,
+            'yeni_telefon': t.yeni_telefon,
+            'yeni_adres': t.yeni_adres,
+            'profil_resmi_var': bool(t.yeni_profil_resmi),
+            'olusturma_tarihi': t.olusturma_tarihi,
+            'karar_tarihi': t.karar_tarihi
+        } for t in talepler]
+        
+        return Response(data)
+
 
 class AdminProfilOnayView(APIView):
     """Admin için profil güncelleme taleplerini yönetme"""
@@ -113,43 +137,99 @@ class AdminProfilOnayView(APIView):
             'id': t.id,
             'calisan': f"{t.calisan.first_name} {t.calisan.last_name}",
             'calisan_id': t.calisan.id,
+            # ESKİ DEĞERLER
+            'eski_telefon': t.eski_telefon,
+            'eski_adres': t.eski_adres,
+            'eski_profil_resmi_var': bool(t.eski_profil_resmi),
+            # YENİ DEĞERLER
             'yeni_telefon': t.yeni_telefon,
             'yeni_adres': t.yeni_adres,
-            'profil_resmi_var': bool(t.yeni_profil_resmi),
+            'yeni_profil_resmi_var': bool(t.yeni_profil_resmi),
             'olusturma_tarihi': t.olusturma_tarihi
         } for t in talepler]
         
         return Response(data)
     
-    def post(self, request, talep_id):
-        """Talebi onayla/reddet"""
+    # post metodu aynı kalacak
+    
+class TopluKullaniciIceAktarView(APIView):
+    """Excel'den toplu kullanıcı içe aktarma"""
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser]
+    
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'hata': 'Dosya bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            talep = ProfilGuncellemeTalebi.objects.get(id=talep_id)
-        except ProfilGuncellemeTalebi.DoesNotExist:
-            return Response({'hata': 'Talep bulunamadı.'}, status=status.HTTP_404_NOT_FOUND)
-        
-        action = request.data.get('action')
-        
-        if action == 'onayla':
-            with transaction.atomic():
-                user = talep.calisan
-                
-                if talep.yeni_telefon:
-                    user.telefon = talep.yeni_telefon
-                if talep.yeni_adres:
-                    user.adres = talep.yeni_adres
-                if talep.yeni_profil_resmi:
-                    user.profil_resmi = talep.yeni_profil_resmi
-                
-                user.save()
-                talep.durum = 'onaylandi'
-                talep.save()
+            df = pd.read_excel(file)
+            df = df.where(pd.notnull(df), None)
             
-            return Response({'mesaj': 'Profil güncelleme talebi onaylandı ve uygulandı.'})
+            eklenen = 0
+            guncellenen = 0
+            
+            for index, row in df.iterrows():
+                username = row.get('username')
+                if not username:
+                    continue
+                
+                user, created = CustomUser.objects.update_or_create(
+                    username=username,
+                    defaults={
+                        'first_name': row.get('first_name', ''),
+                        'last_name': row.get('last_name', ''),
+                        'email': row.get('email', f'{username}@example.com'),  # Varsayılan email
+                        'telefon': str(row.get('telefon', '')),
+                        'adres': row.get('adres', ''),
+                        'enlem': row.get('enlem'),
+                        'boylam': row.get('boylam'),
+                        'cinsiyet': row.get('cinsiyet'),
+                        'rol': 'calisan',
+                        'is_staff': False,
+                        'is_superuser': False,
+                    }
+                )
+                
+                if created:
+                    user.set_password('VardiyaSifre123')
+                    user.save()
+                    eklenen += 1
+                else:
+                    guncellenen += 1
+            
+            return Response({
+                'mesaj': f'{eklenen} kullanıcı eklendi, {guncellenen} kullanıcı güncellendi.',
+                'eklenen': eklenen,
+                'guncellenen': guncellenen
+            })
+            
+        except Exception as e:
+            import traceback
+            print("HATA:", str(e))
+            print(traceback.format_exc())
+            return Response(
+                {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
-        elif action == 'reddet':
-            talep.durum = 'reddedildi'
-            talep.save()
-            return Response({'mesaj': 'Talep reddedildi.'})
+class ProfilGecmisiView(APIView):
+    """Kullanıcının profil güncelleme geçmişi"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        talepler = ProfilGuncellemeTalebi.objects.filter(
+            calisan=request.user
+        ).order_by('-olusturma_tarihi')
         
-        return Response({'hata': 'Geçersiz işlem.'}, status=status.HTTP_400_BAD_REQUEST)
+        data = [{
+            'id': t.id,
+            'durum': t.durum,
+            'yeni_telefon': t.yeni_telefon,
+            'yeni_adres': t.yeni_adres,
+            'profil_resmi_var': bool(t.yeni_profil_resmi),
+            'olusturma_tarihi': t.olusturma_tarihi,
+            'karar_tarihi': t.karar_tarihi
+        } for t in talepler]
+        
+        return Response(data)

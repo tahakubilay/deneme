@@ -1,14 +1,14 @@
-// frontend/src/pages/TopluIceAktarmaPage.js
+// frontend/src/pages/TopluIceAktarmaPage.js - KOMPLE YENİ
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     Container, Typography, Paper, Box, Button, Alert, Grid, Card, CardContent,
-    List, ListItem, ListItemText, Divider, Chip, IconButton, Checkbox,
-    Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress
+    List, ListItem, ListItemText, Divider, Chip, Checkbox, TextField,
+    Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Switch, FormControlLabel
 } from '@mui/material';
 import {
-    CloudUpload, Delete, People, Business, Schedule, CheckCircle, Error
+    CloudUpload, Delete, People, Business, Schedule, CheckCircle, Error, Lock, LockOpen
 } from '@mui/icons-material';
 
 const getAuthHeaders = () => {
@@ -30,10 +30,14 @@ function TopluIceAktarmaPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [deleteType, setDeleteType] = useState(''); // 'calisan' veya 'sube'
+    const [deleteType, setDeleteType] = useState('');
+    const [musaitlikDonem, setMusaitlikDonem] = useState('');
+    const [musaitlikDialogOpen, setMusaitlikDialogOpen] = useState(false);
+    const [musaitlikDurumu, setMusaitlikDurumu] = useState(true); // Müsaitlik sayfası açık/kapalı
 
     useEffect(() => {
         fetchData();
+        fetchMusaitlikDurumu();
     }, []);
 
     const fetchData = () => {
@@ -46,6 +50,31 @@ function TopluIceAktarmaPage() {
         }).catch(err => {
             console.error("Veri yükleme hatası:", err);
             setError("Veriler yüklenemedi.");
+        });
+    };
+
+    const fetchMusaitlikDurumu = () => {
+        axios.get('http://127.0.0.1:8000/api/schedules/musaitlik-durumu/', getAuthHeaders())
+            .then(response => {
+                setMusaitlikDurumu(response.data.acik);
+            })
+            .catch(err => {
+                console.error("Müsaitlik durumu alınamadı:", err);
+            });
+    };
+
+    const handleMusaitlikDurumDegistir = () => {
+        axios.post('http://127.0.0.1:8000/api/schedules/musaitlik-durumu/', 
+            { acik: !musaitlikDurumu }, 
+            getAuthHeaders()
+        )
+        .then(response => {
+            setMusaitlikDurumu(response.data.acik);
+            setSuccess(response.data.mesaj);
+        })
+        .catch(err => {
+            console.error("Müsaitlik durumu değiştirilemedi:", err);
+            setError("İşlem başarısız oldu.");
         });
     };
 
@@ -66,20 +95,20 @@ function TopluIceAktarmaPage() {
         } else if (type === 'sube') {
             endpoint = 'http://127.0.0.1:8000/api/subeler/toplu-ice-aktar/';
         } else if (type === 'musaitlik') {
-            // Dönem parametresi ekle
-            const donem = prompt("Müsaitlik dönemi (YYYY-MM formatında, örn: 2025-11):");
-            if (!donem) {
+            if (!musaitlikDonem) {
+                setError("Lütfen dönem seçin!");
                 setLoading(false);
                 return;
             }
-            endpoint = `http://127.0.0.1:8000/api/schedules/musaitlik/toplu-ice-aktar/?donem=${donem}`;
+            endpoint = `http://127.0.0.1:8000/api/schedules/musaitlik/toplu-ice-aktar/?donem=${musaitlikDonem}`;
         }
 
         axios.post(endpoint, formData, getAuthHeaders())
             .then(response => {
                 setSuccess(response.data.mesaj || 'İçe aktarma başarılı!');
                 fetchData();
-                event.target.value = ''; // Input'u temizle
+                event.target.value = '';
+                setMusaitlikDialogOpen(false);
             })
             .catch(err => {
                 console.error("İçe aktarma hatası:", err);
@@ -88,7 +117,6 @@ function TopluIceAktarmaPage() {
             .finally(() => setLoading(false));
     };
 
-    
     const handleCalisanSelect = (id) => {
         setSelectedCalisanlar(prev => 
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -283,7 +311,7 @@ function TopluIceAktarmaPage() {
                     </Card>
                 </Grid>
 
-                {/* Müsaitlik İçe Aktarma */}
+                {/* Müsaitlik İçe Aktarma - YENİ */}
                 <Grid item xs={12} md={4}>
                     <Card elevation={3}>
                         <CardContent>
@@ -295,29 +323,85 @@ function TopluIceAktarmaPage() {
                             </Box>
                             <Divider sx={{ mb: 2 }} />
                             
+                            {/* Müsaitlik Sayfası Açma/Kapama */}
+                            <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: musaitlikDurumu ? 'success.lighter' : 'error.lighter' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        {musaitlikDurumu ? <LockOpen color="success" /> : <Lock color="error" />}
+                                        <Typography variant="body2" sx={{ ml: 1, fontWeight: 'bold' }}>
+                                            Müsaitlik Sayfası: {musaitlikDurumu ? 'AÇIK' : 'KAPALI'}
+                                        </Typography>
+                                    </Box>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={musaitlikDurumu}
+                                                onChange={handleMusaitlikDurumDegistir}
+                                                color="success"
+                                            />
+                                        }
+                                        label=""
+                                    />
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                    {musaitlikDurumu 
+                                        ? 'Çalışanlar müsaitlik bilgilerini girebilir.' 
+                                        : 'Müsaitlik sayfası çalışanlar için kapalı.'}
+                                </Typography>
+                            </Paper>
+
                             <Button
                                 fullWidth
                                 variant="contained"
-                                component="label"
                                 startIcon={<CloudUpload />}
+                                onClick={() => setMusaitlikDialogOpen(true)}
                                 sx={{ mb: 2 }}
                             >
                                 Excel'den Müsaitlik Ekle
-                                <input
-                                    hidden
-                                    accept=".xlsx,.xls"
-                                    type="file"
-                                    onChange={(e) => handleFileUpload(e, 'musaitlik')}
-                                />
                             </Button>
 
-                            <Alert severity="info" sx={{ mt: 2 }}>
-                                Müsaitlik yüklenirken dönem bilgisi (YYYY-MM) sorulacaktır.
+                            <Alert severity="info">
+                                Müsaitlik yüklenirken dönem bilgisi (YYYY-MM) gereklidir.
                             </Alert>
                         </CardContent>
                     </Card>
                 </Grid>
             </Grid>
+
+            {/* Müsaitlik Yükleme Dialogu */}
+            <Dialog open={musaitlikDialogOpen} onClose={() => setMusaitlikDialogOpen(false)}>
+                <DialogTitle>Toplu Müsaitlik İçe Aktar</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Dönem (YYYY-MM)"
+                        placeholder="Örn: 2025-11"
+                        value={musaitlikDonem}
+                        onChange={(e) => setMusaitlikDonem(e.target.value)}
+                        fullWidth
+                        sx={{ mt: 2, mb: 2 }}
+                        helperText="Müsaitliklerin geçerli olacağı dönemi girin"
+                    />
+                    
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        component="label"
+                        startIcon={<CloudUpload />}
+                        disabled={!musaitlikDonem}
+                    >
+                        Dosya Seç ve Yükle
+                        <input
+                            hidden
+                            accept=".xlsx,.xls"
+                            type="file"
+                            onChange={(e) => handleFileUpload(e, 'musaitlik')}
+                        />
+                    </Button>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setMusaitlikDialogOpen(false)}>İptal</Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Silme Onay Dialogu */}
             <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
@@ -341,4 +425,5 @@ function TopluIceAktarmaPage() {
         </Container>
     );
 }
+
 export default TopluIceAktarmaPage;

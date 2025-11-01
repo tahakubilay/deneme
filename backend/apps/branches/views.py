@@ -103,3 +103,61 @@ class TopluSubeIceAktarView(APIView):
                 {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+class TopluKullaniciIceAktarView(APIView):
+    """Excel'den toplu kullanıcı içe aktarma"""
+    permission_classes = [permissions.IsAdminUser]
+    parser_classes = [MultiPartParser]
+    
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'hata': 'Dosya bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            df = pd.read_excel(file)
+            df = df.where(pd.notnull(df), None)
+            
+            eklenen = 0
+            guncellenen = 0
+            
+            for index, row in df.iterrows():
+                username = row.get('username')
+                if not username:
+                    continue
+                
+                user, created = CustomUser.objects.update_or_create(
+                    username=username,
+                    defaults={
+                        'first_name': row.get('first_name'),
+                        'last_name': row.get('last_name'),
+                        'email': row.get('email'),
+                        'telefon': str(row.get('telefon', '')),
+                        'adres': row.get('adres'),
+                        'enlem': row.get('enlem'),
+                        'boylam': row.get('boylam'),
+                        'cinsiyet': row.get('cinsiyet'),
+                        'rol': 'calisan',
+                        'is_staff': False,
+                        'is_superuser': False,
+                    }
+                )
+                
+                if created:
+                    user.set_password('VardiyaSifre123')
+                    user.save()
+                    eklenen += 1
+                else:
+                    guncellenen += 1
+            
+            return Response({
+                'mesaj': f'{eklenen} kullanıcı eklendi, {guncellenen} kullanıcı güncellendi.',
+                'eklenen': eklenen,
+                'guncellenen': guncellenen
+            })
+            
+        except Exception as e:
+            return Response(
+                {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

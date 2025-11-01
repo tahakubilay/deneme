@@ -3,9 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-    Container, Typography, Paper, List, ListItem, ListItemText, Button, Divider, Box, Chip, Alert, Tab, Tabs, 
-    Modal, Fade, Backdrop, Select, MenuItem, FormControl, InputLabel, CircularProgress, Avatar, Grid
+        Container, Typography, Paper, List, ListItem, ListItemText, Button, Divider, Box, Chip, Alert, Tab
+    , Tabs, 
+    Modal, Fade, Backdrop, Select, MenuItem, FormControl, InputLabel, CircularProgress, Avatar, Grid,
+    ListItemIcon
 } from '@mui/material';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import CancelIcon from '@mui/icons-material/Cancel';
+import personIcon from '@mui/icons-material/Person';
+import HistoryIcon from '@mui/icons-material/History';
+import moment from 'moment';
+
+
 
 const modalStyle = {
     position: 'absolute',
@@ -33,6 +42,7 @@ function AdminOnayPage() {
     const [uygunCalisanlar, setUygunCalisanlar] = useState([]);
     const [selectedCalisanId, setSelectedCalisanId] = useState('');
     const [modalLoading, setModalLoading] = useState(false);
+    const [islemGecmisi, setIslemGecmisi] = useState([]);
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('accessToken');
@@ -67,10 +77,21 @@ function AdminOnayPage() {
             });
     };
 
+    const fetchIslemGecmisi = () => {
+        axios.get('http://127.0.0.1:8000/api/schedules/admin/onay-gecmisi/', getAuthHeaders())
+            .then(response => {
+                setIslemGecmisi(response.data);
+            })
+            .catch(error => {
+                console.error("İşlem geçmişi çekilirken hata!", error);
+            });
+    };
+
     useEffect(() => {
         fetchTakasIstekleri();
         fetchIptalIstekleri();
-        fetchProfilTalepleri(); // YENİ
+        fetchProfilTalepleri();
+        fetchIslemGecmisi();
     }, []);
 
     const handleTakasAksiyon = (istekId, action) => {
@@ -154,10 +175,12 @@ function AdminOnayPage() {
             {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                    
                 <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
                     <Tab label={`Takas (${takasIstekleri.length})`} />
                     <Tab label={`İptal (${iptalIstekleri.length})`} />
                     <Tab label={`Profil (${profilTalepleri.length})`} />
+                    <Tab label="Geçmiş" />
                 </Tabs>
             </Box>
 
@@ -246,6 +269,74 @@ function AdminOnayPage() {
                             </React.Fragment>
                         )) : <Typography>Onay bekleyen profil talebi yok.</Typography>}
                     </List>
+                </Paper>
+            )}
+            
+            {/* TAB 3: Geçmiş */}
+            {tabValue === 3 && (
+                <Paper sx={{ p: 2, mt: 2 }}>
+                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <HistoryIcon /> İşlem Geçmişi (Son 50 Kayıt)
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+
+                    {islemGecmisi.length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 4 }}>
+                            <Typography color="text.secondary">
+                                Henüz işlem geçmişi bulunmamaktadır.
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <List>
+                            {islemGecmisi.map((islem, index) => (
+                                <React.Fragment key={`${islem.tip}-${islem.id}`}>
+                                    <ListItem>
+                                        <ListItemIcon>
+                                            {islem.tip === 'takas' ? (
+                                                <SwapHorizIcon color={islem.durum === 'onaylandi' ? 'success' : 'error'} />
+                                            ) : (
+                                                <CancelIcon color={islem.durum === 'onaylandi' ? 'success' : 'error'} />
+                                            )}
+                                        </ListItemIcon>
+                                        <ListItemText 
+                                            primary={
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Chip 
+                                                        label={islem.tip === 'takas' ? 'TAKAS' : 'İPTAL'}
+                                                        size="small"
+                                                        color={islem.tip === 'takas' ? 'primary' : 'warning'}
+                                                    />
+                                                    {islem.tip === 'takas' ? (
+                                                        <Typography variant="body2">
+                                                            {islem.istek_yapan} ↔ {islem.hedef_calisan}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography variant="body2">
+                                                            {islem.istek_yapan} - {islem.vardiya}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                            }
+                                            secondary={
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {moment(islem.tarih).format('DD MMMM YYYY, HH:mm')}
+                                                    </Typography>
+                                                    <Chip 
+                                                        label={islem.durum === 'onaylandi' ? 'Onaylandı' : 'Reddedildi'}
+                                                        size="small"
+                                                        color={islem.durum === 'onaylandi' ? 'success' : 'error'}
+                                                        sx={{ height: 20 }}
+                                                    />
+                                                </Box>
+                                            }
+                                        />
+                                    </ListItem>
+                                    {index < islemGecmisi.length - 1 && <Divider />}
+                                </React.Fragment>
+                            ))}
+                        </List>
+                    )}
                 </Paper>
             )}
 

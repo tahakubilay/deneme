@@ -1,4 +1,4 @@
-// src/pages/IsteklerimPage.js - GELİŞTİRİLMİŞ VERSİYON
+// src/pages/IsteklerimPage.js - GELİŞTİRİLMİŞ VERSİYON (DÜZELTME)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
@@ -11,7 +11,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import HistoryIcon from '@mui/icons-material/History';
-import PersonIcon from '@mui/icons-material/Person'; // YENİ
+import PersonIcon from '@mui/icons-material/Person';
 import moment from 'moment';
 
 const getStatusChipProps = (status) => {
@@ -29,11 +29,25 @@ const getStatusChipProps = (status) => {
     }
 };
 
+const getProfilDurumChip = (durum) => {
+    switch (durum) {
+        case 'beklemede':
+            return { color: 'warning', label: 'Beklemede' };
+        case 'onaylandi':
+            return { color: 'success', label: 'Onaylandı' };
+        case 'reddedildi':
+            return { color: 'error', label: 'Reddedildi' };
+        default:
+            return { color: 'default', label: durum };
+    }
+};
+
 function IsteklerimPage() {
     const [gelenIstekler, setGelenIstekler] = useState([]);
     const [gidenTakasIstekleri, setGidenTakasIstekleri] = useState([]);
     const [gidenIptalIstekleri, setGidenIptalIstekleri] = useState([]);
-    const [profilTalebi, setProfilTalebi] = useState(null); // YENİ
+    const [profilTalebi, setProfilTalebi] = useState(null);
+    const [profilGecmisi, setProfilGecmisi] = useState([]); // ← EKLEME
     const [takasGecmisi, setTakasGecmisi] = useState([]);
     const [iptalGecmisi, setIptalGecmisi] = useState([]);
     const [kullanici, setKullanici] = useState(null);
@@ -64,7 +78,7 @@ function IsteklerimPage() {
         setError('');
         setSuccess('');
 
-        // Takas isteklerini çek (TÜM İSTEKLER)
+        // Takas isteklerini çek
         axios.get('http://127.0.0.1:8000/api/schedules/istekler/', authHeaders)
             .then(response => {
                 const gelen = response.data.filter(istek => 
@@ -91,7 +105,7 @@ function IsteklerimPage() {
                 setError("Takas istekleri yüklenirken bir hata oluştu.");
             });
 
-        // İptal isteklerini çek (TÜM İSTEKLER)
+        // İptal isteklerini çek
         axios.get('http://127.0.0.1:8000/api/schedules/iptal-isteklerim/', authHeaders)
             .then(response => {
                 const aktif = response.data.filter(istek => 
@@ -110,14 +124,22 @@ function IsteklerimPage() {
                 setError("İptal istekleri yüklenirken bir hata oluştu.");
             });
 
-        // Profil güncelleme talebi çek (YENİ)
+        // Bekleyen profil talebi çek
         axios.get('http://127.0.0.1:8000/api/kullanicilar/profil-talebi/', authHeaders)
             .then(response => {
                 setProfilTalebi(response.data);
             })
             .catch(error => {
-                // Talep yoksa 404 dönecek, sorun değil
                 setProfilTalebi(null);
+            });
+
+        // Profil geçmişini çek (YENİ)
+        axios.get('http://127.0.0.1:8000/api/kullanicilar/profil-gecmis/', authHeaders)
+            .then(response => {
+                setProfilGecmisi(response.data);
+            })
+            .catch(error => {
+                console.error("Profil geçmişi çekilirken hata:", error);
             });
 
     }, [kullanici, getAuthHeaders]);
@@ -196,7 +218,8 @@ function IsteklerimPage() {
                         <CardContent sx={{ textAlign: 'center', py: 2 }}>
                             <Typography variant="h4" fontWeight="bold">
                                 {takasGecmisi.filter(i => i.durum === 'onaylandi').length + 
-                                 iptalGecmisi.filter(i => i.durum === 'onaylandi').length}
+                                 iptalGecmisi.filter(i => i.durum === 'onaylandi').length +
+                                 profilGecmisi.filter(i => i.durum === 'onaylandi').length}
                             </Typography>
                             <Typography variant="caption">Onaylanan</Typography>
                         </CardContent>
@@ -207,7 +230,8 @@ function IsteklerimPage() {
                         <CardContent sx={{ textAlign: 'center', py: 2 }}>
                             <Typography variant="h4" fontWeight="bold">
                                 {takasGecmisi.filter(i => i.durum === 'reddedildi').length + 
-                                 iptalGecmisi.filter(i => i.durum === 'reddedildi').length}
+                                 iptalGecmisi.filter(i => i.durum === 'reddedildi').length +
+                                 profilGecmisi.filter(i => i.durum === 'reddedildi').length}
                             </Typography>
                             <Typography variant="caption">Reddedilen</Typography>
                         </CardContent>
@@ -219,7 +243,7 @@ function IsteklerimPage() {
                 <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
                     <Tab label={`Gelen (${gelenIstekler.length})`} />
                     <Tab label={`Bekleyen (${gidenTakasIstekleri.length + gidenIptalIstekleri.length + (profilTalebi ? 1 : 0)})`} />
-                    <Tab label={`Geçmiş (${takasGecmisi.length + iptalGecmisi.length})`} />
+                    <Tab label={`Geçmiş (${takasGecmisi.length + iptalGecmisi.length + profilGecmisi.length})`} />
                 </Tabs>
             </Box>
 
@@ -252,7 +276,6 @@ function IsteklerimPage() {
             {/* TAB 1: Bekleyen İstekler */}
             {tabValue === 1 && (
                 <>
-                    {/* Profil Güncelleme Talebi (YENİ) */}
                     {profilTalebi && (
                         <Paper sx={{ p: 2, mb: 2, bgcolor: 'info.lighter' }}>
                             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -331,7 +354,7 @@ function IsteklerimPage() {
                         </List>
                     </Paper>
 
-                    <Paper sx={{ p: 2 }}>
+                    <Paper sx={{ p: 2, mb: 2 }}>
                         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <HistoryIcon /> İptal Geçmişi
                         </Typography>
@@ -346,6 +369,31 @@ function IsteklerimPage() {
                                     <Chip {...getStatusChipProps(istek.durum)} />
                                 </ListItem>
                             )) : <Typography sx={{p: 2}}>İptal geçmişiniz bulunmuyor.</Typography>}
+                        </List>
+                    </Paper>
+
+                    {/* Profil Değişiklik Geçmişi (YENİ) */}
+                    <Paper sx={{ p: 2 }}>
+                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon /> Profil Güncelleme Geçmişi
+                        </Typography>
+                        <List>
+                            {profilGecmisi.length > 0 ? profilGecmisi.map((talep, index) => (
+                                <ListItem key={talep.id} divider={index < profilGecmisi.length - 1}>
+                                    <ListItemIcon><PersonIcon color="disabled" /></ListItemIcon>
+                                    <ListItemText 
+                                        primary={
+                                            <>
+                                                {talep.yeni_telefon && `Telefon: ${talep.yeni_telefon}`}
+                                                {talep.yeni_adres && ` | Adres değişikliği`}
+                                                {talep.profil_resmi_var && ` | Profil resmi`}
+                                            </>
+                                        }
+                                        secondary={moment(talep.olusturma_tarihi).format('DD MMMM YYYY, HH:mm')}
+                                    />
+                                    <Chip {...getProfilDurumChip(talep.durum)} />
+                                </ListItem>
+                            )) : <Typography sx={{p: 2}}>Profil güncelleme geçmişiniz bulunmuyor.</Typography>}
                         </List>
                     </Paper>
                 </>

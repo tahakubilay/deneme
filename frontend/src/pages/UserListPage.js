@@ -1,4 +1,4 @@
-// frontend/src/pages/UserListPage.js - GELİŞTİRİLMİŞ
+// frontend/src/pages/UserListPage.js - KOMPLE YENİ
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -8,9 +8,7 @@ import {
     Modal, Fade, Backdrop, TextField, Button, Select, MenuItem, FormControl, InputLabel,
     Checkbox, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import { Edit, Delete, CloudUpload } from '@mui/icons-material';
 
 const modalStyle = {
     position: 'absolute',
@@ -26,11 +24,22 @@ const modalStyle = {
 
 function UserListPage() {
     const [kullanicilar, setKullanicilar] = useState([]);
-    const [selectedUsers, setSelectedUsers] = useState([]); // YENİ
+    const [selectedUsers, setSelectedUsers] = useState([]);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false); // YENİ
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    
+    // Tekli ekleme için state'ler
+    const [yeniKullanici, setYeniKullanici] = useState({
+        username: '',
+        first_name: '',
+        last_name: '',
+        email: '',
+        telefon: '',
+        rol: 'calisan',
+        password: 'VardiyaSifre123'
+    });
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -131,6 +140,37 @@ function UserListPage() {
         });
     };
 
+    // TEKLİ EKLEME
+    const handleYeniKullaniciChange = (e) => {
+        const { name, value } = e.target;
+        setYeniKullanici(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleYeniKullaniciSubmit = (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+
+        axios.post('http://127.0.0.1:8000/api/kullanicilar/', yeniKullanici, getAuthHeaders())
+            .then(response => {
+                setSuccess('Yeni kullanıcı başarıyla eklendi.');
+                setYeniKullanici({
+                    username: '',
+                    first_name: '',
+                    last_name: '',
+                    email: '',
+                    telefon: '',
+                    rol: 'calisan',
+                    password: 'VardiyaSifre123'
+                });
+                fetchKullanicilar();
+            })
+            .catch(error => {
+                console.error("Kullanıcı eklenirken hata!", error);
+                setError(error.response?.data?.username?.[0] || 'Kullanıcı eklenirken bir hata oluştu.');
+            });
+    };
+
     const handleDelete = (userId) => {
         if (window.confirm("Bu kullanıcıyı silmek istediğinizden emin misiniz?")) {
             setError(''); setSuccess('');
@@ -188,7 +228,7 @@ function UserListPage() {
                         <Button
                             variant="contained"
                             component="label"
-                            startIcon={<CloudUploadIcon />}
+                            startIcon={<CloudUpload />}
                             color="primary"
                         >
                             Excel'den Ekle
@@ -203,7 +243,7 @@ function UserListPage() {
                         <Button
                             variant="outlined"
                             color="error"
-                            startIcon={<DeleteIcon />}
+                            startIcon={<Delete />}
                             disabled={selectedUsers.length === 0}
                             onClick={handleBulkDelete}
                         >
@@ -213,8 +253,76 @@ function UserListPage() {
                 )}
             </Box>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+
+            {/* TEKLİ EKLEME FORMU */}
+            {currentUser && currentUser.is_staff && (
+                <Paper sx={{ p: 2, mb: 3 }}>
+                    <Typography variant="h6" gutterBottom>Yeni Kullanıcı Ekle</Typography>
+                    <Box component="form" onSubmit={handleYeniKullaniciSubmit}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                            <TextField
+                                label="Kullanıcı Adı"
+                                name="username"
+                                value={yeniKullanici.username}
+                                onChange={handleYeniKullaniciChange}
+                                required
+                                size="small"
+                            />
+                            <TextField
+                                label="Ad"
+                                name="first_name"
+                                value={yeniKullanici.first_name}
+                                onChange={handleYeniKullaniciChange}
+                                required
+                                size="small"
+                            />
+                            <TextField
+                                label="Soyad"
+                                name="last_name"
+                                value={yeniKullanici.last_name}
+                                onChange={handleYeniKullaniciChange}
+                                required
+                                size="small"
+                            />
+                        </Box>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                            <TextField
+                                label="E-posta"
+                                name="email"
+                                type="email"
+                                value={yeniKullanici.email}
+                                onChange={handleYeniKullaniciChange}
+                                required
+                                size="small"
+                            />
+                            <TextField
+                                label="Telefon"
+                                name="telefon"
+                                value={yeniKullanici.telefon}
+                                onChange={handleYeniKullaniciChange}
+                                size="small"
+                            />
+                            <FormControl size="small">
+                                <InputLabel>Rol</InputLabel>
+                                <Select
+                                    name="rol"
+                                    value={yeniKullanici.rol}
+                                    label="Rol"
+                                    onChange={handleYeniKullaniciChange}
+                                >
+                                    <MenuItem value="calisan">Çalışan</MenuItem>
+                                    <MenuItem value="admin">Admin</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Box>
+                        <Button type="submit" variant="contained">
+                            Kullanıcı Ekle
+                        </Button>
+                    </Box>
+                </Paper>
+            )}
 
             <TableContainer component={Paper}>
                 <Table>
@@ -259,10 +367,10 @@ function UserListPage() {
                                 {currentUser && currentUser.is_staff && (
                                     <TableCell align="right">
                                         <IconButton onClick={() => handleEditClick(user)} color="primary">
-                                            <EditIcon />
+                                            <Edit />
                                         </IconButton>
                                         <IconButton onClick={() => handleDelete(user.id)} color="error">
-                                            <DeleteIcon />
+                                            <Delete />
                                         </IconButton>
                                     </TableCell>
                                 )}

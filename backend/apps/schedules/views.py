@@ -1,5 +1,3 @@
-# backend/apps/schedules/views.py
-
 from django.db.models import Q
 from django.db import transaction
 from django.core.management import call_command
@@ -12,11 +10,9 @@ import secrets
 from datetime import timedelta
 from rest_framework.parsers import MultiPartParser
 import pandas as pd
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics, permissions, viewsets
-
 from apps.users.models import CustomUser
 from .models import Musaitlik, Vardiya, VardiyaIstegi, VardiyaIptalIstegi, CalisanTercihi, KisitlamaKurali
 from .serializers import (
@@ -26,6 +22,7 @@ from .serializers import (
     KisitlamaKuraliSerializer
 )
 from .choices import IstekTipi, IstekDurum, VardiyaDurum, Gunler, MusaitlikDurum
+from django.core.cache import cache
 
 class VardiyaBaslatBitirView(APIView):
     """QR kod ile vardiya başlatma/bitirme"""
@@ -194,14 +191,33 @@ class MusaitlikView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        current_donem = "2025-10" # Bu dönemi dinamik hale getirmek sonraki adım olabilir
+        # Admin her zaman erişebilir
+        if not request.user.is_staff:
+            # Sayfa kapalıysa çalışanlar erişemez
+            acik = cache.get('musaitlik_sayfa_acik', True)
+            if not acik:
+                return Response(
+                    {'hata': 'Müsaitlik sayfası şu anda kapalıdır.'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        current_donem = "2025-11"  # Dinamik hale getirilebilir
         musaitlikler = Musaitlik.objects.filter(calisan=request.user, donem=current_donem)
         serializer = MusaitlikSerializer(musaitlikler, many=True)
         return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
+        # Admin her zaman erişebilir
+        if not request.user.is_staff:
+            acik = cache.get('musaitlik_sayfa_acik', True)
+            if not acik:
+                return Response(
+                    {'hata': 'Müsaitlik sayfası şu anda kapalıdır.'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
         yeni_sablon = request.data.get('sablon', [])
-        current_donem = "2025-10"
+        current_donem = "2025-11"
         
         Musaitlik.objects.filter(calisan=request.user, donem=current_donem).delete()
         
@@ -214,20 +230,24 @@ class MusaitlikView(APIView):
             )
         
         return Response({'message': 'Müsaitlik durumu başarıyla güncellendi.'}, status=status.HTTP_201_CREATED)
-
 class VardiyaListAPIView(generics.ListAPIView):
-    queryset = Vardiya.objects.filter(durum='taslak').order_by('baslangic_zamani')
+    """TÜM vardiyaları listeler - TASLAK HARİÇ"""
     serializer_class = VardiyaSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # TASLAK olmayan TÜM vardiyaları döndür
+        return Vardiya.objects.exclude(durum='taslak').order_by('baslangic_zamani')
 
 class BenimVardiyalarimListView(generics.ListAPIView):
+    """Sadece kullanıcının kendi vardiyaları"""
     serializer_class = VardiyaSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return Vardiya.objects.filter(
             calisan=self.request.user,
-            durum__in=['taslak', 'planlandi', 'iptal_istegi'], 
+            durum__in=['planlandi', 'baslatildi', 'iptal_istegi'],  # taslak HARİÇ
             baslangic_zamani__gte=datetime.now()
         ).order_by('baslangic_zamani')
 
@@ -669,3 +689,65 @@ class TopluMusaitlikIceAktarView(APIView):
                 {'hata': f'Dosya işlenirken hata: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+class MusaitlikDurumuView(APIView):
+    """Müsaitlik sayfası açık/kapalı durumu"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Müsaitlik durumunu getir"""
+        acik = cache.get('musaitlik_sayfa_acik', True)  # Varsayılan: açık
+        return Response({'acik': acik})
+    
+    def post(self, request):
+        """Müsaitlik durumunu değiştir (Sadece admin)"""
+        if not request.user.is_staff:
+            return Response(
+                {'hata': 'Bu işlem için yetkiniz yok.'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        acik = request.data.get('acik', True)
+        cache.set('musaitlik_sayfa_acik', acik, None)  # Süresiz sakla
+        
+        mesaj = 'Müsaitlik sayfası açıldı.' if acik else 'Müsaitlik sayfası kapatıldı.'
+        return Response({'mesaj': mesaj, 'acik': acik})
+
+class AdminOnayGecmisiView(APIView):
+    """Admin'in onayladığı/reddettiği isteklerin geçmişi"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        # Takas geçmişi
+        takas_istekleri = VardiyaIstegi.objects.filter(
+            durum__in=['onaylandi', 'reddedildi']
+        ).order_by('-guncellenme_tarihi')[:50]  # Son 50 kayıt
+        
+        # İptal geçmişi
+        iptal_istekleri = VardiyaIptalIstegi.objects.filter(
+            durum__in=['onaylandi', 'reddedildi']
+        ).order_by('-guncellenme_tarihi')[:50]
+        
+        takas_data = [{
+            'id': istek.id,
+            'tip': 'takas',
+            'istek_yapan': istek.istek_yapan.get_full_name(),
+            'hedef_calisan': istek.hedef_calisan.get_full_name(),
+            'durum': istek.durum,
+            'tarih': istek.guncellenme_tarihi
+        } for istek in takas_istekleri]
+        
+        iptal_data = [{
+            'id': istek.id,
+            'tip': 'iptal',
+            'istek_yapan': istek.istek_yapan.get_full_name(),
+            'vardiya': f"{istek.vardiya.sube.sube_adi} - {istek.vardiya.baslangic_zamani.strftime('%d.%m.%Y %H:%M')}",
+            'durum': istek.durum,
+            'tarih': istek.guncellenme_tarihi
+        } for istek in iptal_istekleri]
+        
+        # Birleştir ve tarihe göre sırala
+        tum_istekler = takas_data + iptal_data
+        tum_istekler.sort(key=lambda x: x['tarih'], reverse=True)
+        
+        return Response(tum_istekler[:500])  # Son 500 kayıt

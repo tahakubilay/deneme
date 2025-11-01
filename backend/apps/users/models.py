@@ -49,18 +49,18 @@ class ProfilGuncellemeTalebi(models.Model):
         on_delete=models.CASCADE, 
         related_name='profil_talepleri'
     )
+    
+    # ESKİ DEĞERLER (YENİ ALANLAR)
+    eski_telefon = models.CharField(max_length=20, blank=True, null=True)
+    eski_adres = models.TextField(blank=True, null=True)
+    eski_profil_resmi = models.ImageField(upload_to='profil_resimleri/', blank=True, null=True)
+    
+    # YENİ DEĞERLER
     yeni_telefon = models.CharField(max_length=20, blank=True, null=True)
     yeni_adres = models.TextField(blank=True, null=True)
-    yeni_profil_resmi = models.ImageField(
-        upload_to='profil_resimleri/', 
-        blank=True, 
-        null=True
-    )
-    durum = models.CharField(
-        max_length=20, 
-        choices=DURUM_CHOICES, 
-        default='beklemede'
-    )
+    yeni_profil_resmi = models.ImageField(upload_to='profil_resimleri/', blank=True, null=True)
+    
+    durum = models.CharField(max_length=20, choices=DURUM_CHOICES, default='beklemede')
     olusturma_tarihi = models.DateTimeField(auto_now_add=True)
     karar_tarihi = models.DateTimeField(blank=True, null=True)
     

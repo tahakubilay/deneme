@@ -26,7 +26,7 @@ class KisitlamaKuraliSerializer(serializers.ModelSerializer):
         fields = ['id', 'sube', 'sube_adi', 'sart', 'sart_display', 'baslangic_saati']
 
 class VardiyaSerializer(serializers.ModelSerializer):
-    calisan_adi = serializers.StringRelatedField(source='calisan')
+    calisan_adi = serializers.SerializerMethodField()  # ← Metod olarak tanımla
     sube_adi = serializers.StringRelatedField(source='sube')
     iptal_istegi_id = serializers.SerializerMethodField()
     aktif_istek_durumu = serializers.SerializerMethodField()
@@ -35,8 +35,15 @@ class VardiyaSerializer(serializers.ModelSerializer):
         model = Vardiya
         fields = [
             'id', 'sube', 'sube_adi', 'calisan', 'calisan_adi', 
-            'baslangic_zamani', 'bitis_zamani', 'gercek_baslangic_zamani', 'gercek_bitis_zamani', 'durum', 'iptal_istegi_id', 'aktif_istek_durumu'
+            'baslangic_zamani', 'bitis_zamani', 'gercek_baslangic_zamani', 
+            'gercek_bitis_zamani', 'durum', 'iptal_istegi_id', 'aktif_istek_durumu'
         ]
+    
+    def get_calisan_adi(self, obj):
+        """Çalışan adını döndür"""
+        if obj.calisan:
+            return obj.calisan.get_full_name() or obj.calisan.username
+        return "Atanmamış"
 
     def get_iptal_istegi_id(self, obj):
         if hasattr(obj, 'iptal_istegi') and obj.iptal_istegi.durum == 'admin_onayi_bekliyor':

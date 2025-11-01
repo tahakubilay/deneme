@@ -183,8 +183,12 @@ function TakvimPage() {
     const fetchVardiyalar = useCallback(() => {
         setLoading(true); 
         setError('');
+    
+        // ← KRİTİK: Endpoint doğru mu kontrol et
         axios.get('http://127.0.0.1:8000/api/schedules/vardiyalar/', getAuthHeaders())
             .then(response => {
+                console.log("API'den gelen vardiyalar:", response.data); // ← DEBUG için ekle
+                
                 const formattedEvents = response.data.map(vardiya => ({
                     id: vardiya.id,
                     title: `${vardiya.calisan_adi} @ ${vardiya.sube_adi}`,
@@ -192,6 +196,8 @@ function TakvimPage() {
                     end: new Date(vardiya.bitis_zamani),
                     resource: vardiya
                 }));
+            
+                console.log("Formatlı eventler:", formattedEvents); // ← DEBUG için ekle
                 setEvents(formattedEvents);
                 setFilteredEvents(formattedEvents);
             })
@@ -221,9 +227,9 @@ function TakvimPage() {
     const handleViewChange = useCallback((newView) => setView(newView), [setView]);
 
     const handlePDFExport = () => {
-        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
+        const doc = new jsPDF('l', 'mm', 'a4');
         const currentWeekStart = moment(date).startOf('isoWeek');
-        
+    
         // Başlık
         doc.setFontSize(16);
         doc.text('Vardiya Takvimi', 148, 15, { align: 'center' });
@@ -246,14 +252,14 @@ function TakvimPage() {
                 const subeId = event.resource.sube;
                 const subeAdi = event.resource.sube_adi;
                 const dayIndex = eventDate.isoWeekday() - 1;
-                
+            
                 if (!subeler[subeId]) {
                     subeler[subeId] = { 
                         adi: subeAdi, 
                         gunler: Array(7).fill(null).map(() => []) 
                     };
                 }
-                
+            
                 subeler[subeId].gunler[dayIndex].push({
                     calisan: event.resource.calisan_adi,
                     baslangic: moment(event.start).format('HH:mm'),
@@ -278,28 +284,36 @@ function TakvimPage() {
             return row;
         });
 
-        doc.autoTable({
-            head: [['Şube', ...weekDays]],
-            body: tableData,
-            startY: 30,
-            styles: { 
-                fontSize: 8, 
-                cellPadding: 2,
-                halign: 'center',
-                valign: 'middle'
-            },
-            headStyles: { 
-                fillColor: [102, 126, 234],
-                fontStyle: 'bold'
-            },
-            columnStyles: {
-                0: { cellWidth: 40, fontStyle: 'bold', halign: 'left' }
-            },
-            alternateRowStyles: {
-                fillColor: [245, 245, 245]
-            },
-            margin: { top: 30, left: 10, right: 10 }
-        });
+    // ← KRİTİK: import edilen jspdf-autotable otomatik olarak doc'a autoTable ekliyor
+    // Eğer hala çalışmazsa, package.json'da versiyon kontrolü yapın
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                head: [['Şube', ...weekDays]],
+                body: tableData,
+                startY: 30,
+                styles: { 
+                    fontSize: 8, 
+                    cellPadding: 2,
+                    halign: 'center',
+                    valign: 'middle'
+                },
+                headStyles: { 
+                    fillColor: [102, 126, 234],
+                    fontStyle: 'bold'
+                },
+                columnStyles: {
+                    0: { cellWidth: 40, fontStyle: 'bold', halign: 'left' }
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 245, 245]
+                },
+                margin: { top: 30, left: 10, right: 10 }
+            });
+        } else {
+            console.error('autoTable metodu bulunamadı!');
+            alert('PDF oluşturulamadı. Lütfen sayfayı yenileyin.');
+            return;
+        }
 
         doc.save(`Vardiya_Takvimi_${currentWeekStart.format('YYYY-MM-DD')}.pdf`);
     };

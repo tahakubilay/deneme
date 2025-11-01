@@ -1,13 +1,14 @@
-// frontend/src/pages/AdminProfilOnayPage.js
+// frontend/src/pages/AdminProfilOnayPage.js - DETAYLI VERSİYON
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     Container, Typography, Paper, Box, Grid, Card, CardContent,
-    CardMedia, Button, Alert, Chip, Divider, Avatar, Dialog,
-    DialogTitle, DialogContent, DialogActions, CircularProgress
+    Button, Alert, Chip, Divider, Avatar, Dialog,
+    DialogTitle, DialogContent, DialogActions, CircularProgress, Table,
+    TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
-import { CheckCircle, Cancel, Person, Phone, Home, CalendarToday } from '@mui/icons-material';
+import { CheckCircle, Cancel, Person, Phone, Home, CalendarToday, CompareArrows, Image } from '@mui/icons-material';
 import moment from 'moment';
 
 const getAuthHeaders = () => {
@@ -54,7 +55,7 @@ function AdminProfilOnayPage() {
         .then(response => {
             setSuccess(response.data.mesaj);
             setDialogOpen(false);
-            fetchTalepler(); // Listeyi yenile
+            fetchTalepler();
         })
         .catch(err => {
             console.error("İşlem hatası:", err);
@@ -66,6 +67,15 @@ function AdminProfilOnayPage() {
     const openDetailDialog = (talep) => {
         setSelectedTalep(talep);
         setDialogOpen(true);
+    };
+
+    // Değişiklik var mı kontrol et
+    const hasChanges = (talep) => {
+        return (
+            (talep.yeni_telefon && talep.yeni_telefon !== talep.eski_telefon) ||
+            (talep.yeni_adres && talep.yeni_adres !== talep.eski_adres) ||
+            talep.yeni_profil_resmi_var
+        );
     };
 
     if (loading) {
@@ -84,7 +94,7 @@ function AdminProfilOnayPage() {
                     Profil Güncelleme Talepleri
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                    Çalışanların profil güncelleme taleplerini onaylayın veya reddedin
+                    Çalışanların profil güncelleme taleplerini inceleyin ve onaylayın
                 </Typography>
             </Box>
 
@@ -100,8 +110,8 @@ function AdminProfilOnayPage() {
             ) : (
                 <Grid container spacing={3}>
                     {talepler.map(talep => (
-                        <Grid item xs={12} md={6} key={talep.id}>
-                            <Card elevation={3} sx={{ height: '100%' }}>
+                        <Grid item xs={12} key={talep.id}>
+                            <Card elevation={3}>
                                 <CardContent>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -123,42 +133,120 @@ function AdminProfilOnayPage() {
 
                                     <Divider sx={{ my: 2 }} />
 
-                                    <Grid container spacing={2}>
-                                        {talep.yeni_telefon && (
-                                            <Grid item xs={12}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Phone color="primary" fontSize="small" />
-                                                    <Box>
-                                                        <Typography variant="caption" color="text.secondary">Yeni Telefon</Typography>
-                                                        <Typography variant="body2" fontWeight="bold">{talep.yeni_telefon}</Typography>
-                                                    </Box>
-                                                </Box>
-                                            </Grid>
-                                        )}
+                                    {/* DEĞİŞİKLİKLER TABLOSU */}
+                                    <TableContainer>
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell><strong>Alan</strong></TableCell>
+                                                    <TableCell><strong>Eski Değer</strong></TableCell>
+                                                    <TableCell align="center"><CompareArrows /></TableCell>
+                                                    <TableCell><strong>Yeni Değer</strong></TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {/* TELEFON */}
+                                                {talep.yeni_telefon && (
+                                                    <TableRow>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Phone fontSize="small" color="primary" />
+                                                                Telefon
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography 
+                                                                variant="body2" 
+                                                                sx={{ 
+                                                                    textDecoration: talep.eski_telefon ? 'line-through' : 'none',
+                                                                    color: 'text.secondary'
+                                                                }}
+                                                            >
+                                                                {talep.eski_telefon || '(Boş)'}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell align="center">
+                                                            <Chip label="→" size="small" color="info" />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography 
+                                                                variant="body2" 
+                                                                fontWeight="bold" 
+                                                                color="success.main"
+                                                            >
+                                                                {talep.yeni_telefon}
+                                                            </Typography>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
 
-                                        {talep.yeni_adres && (
-                                            <Grid item xs={12}>
-                                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                                    <Home color="primary" fontSize="small" />
-                                                    <Box>
-                                                        <Typography variant="caption" color="text.secondary">Yeni Adres</Typography>
-                                                        <Typography variant="body2" fontWeight="bold">{talep.yeni_adres}</Typography>
-                                                    </Box>
-                                                </Box>
-                                            </Grid>
-                                        )}
+                                                {/* ADRES */}
+                                                {talep.yeni_adres && (
+                                                    <TableRow>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Home fontSize="small" color="primary" />
+                                                                Adres
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography 
+                                                                variant="body2" 
+                                                                sx={{ 
+                                                                    textDecoration: talep.eski_adres ? 'line-through' : 'none',
+                                                                    color: 'text.secondary',
+                                                                    maxWidth: 200,
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis'
+                                                                }}
+                                                            >
+                                                                {talep.eski_adres || '(Boş)'}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell align="center">
+                                                            <Chip label="→" size="small" color="info" />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography 
+                                                                variant="body2" 
+                                                                fontWeight="bold" 
+                                                                color="success.main"
+                                                            >
+                                                                {talep.yeni_adres}
+                                                            </Typography>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
 
-                                        {talep.profil_resmi_var && (
-                                            <Grid item xs={12}>
-                                                <Chip 
-                                                    icon={<Person />} 
-                                                    label="Yeni profil resmi var" 
-                                                    color="info" 
-                                                    size="small"
-                                                />
-                                            </Grid>
-                                        )}
-                                    </Grid>
+                                                {/* PROFİL RESMİ */}
+                                                {talep.yeni_profil_resmi_var && (
+                                                    <TableRow>
+                                                        <TableCell>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Image fontSize="small" color="primary" />
+                                                                Profil Resmi
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {talep.eski_profil_resmi_var ? 'Mevcut resim' : 'Resim yok'}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell align="center">
+                                                            <Chip label="→" size="small" color="info" />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip 
+                                                                label="Yeni resim yüklendi" 
+                                                                color="success" 
+                                                                size="small"
+                                                            />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
 
                                     <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
                                         <Button
@@ -210,35 +298,59 @@ function AdminProfilOnayPage() {
 
                                 <Divider sx={{ my: 2 }} />
 
+                                <Typography variant="h6" gutterBottom>
+                                    Yapılacak Değişiklikler:
+                                </Typography>
+
                                 {selectedTalep.yeni_telefon && (
                                     <Box sx={{ mb: 2 }}>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Yeni Telefon Numarası
-                                        </Typography>
-                                        <Typography variant="h6" color="primary">
-                                            {selectedTalep.yeni_telefon}
-                                        </Typography>
+                                        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Telefon Numarası
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ textDecoration: 'line-through' }}
+                                                >
+                                                    {selectedTalep.eski_telefon || '(Boş)'}
+                                                </Typography>
+                                                <Typography variant="body2">→</Typography>
+                                                <Typography variant="h6" color="primary">
+                                                    {selectedTalep.yeni_telefon}
+                                                </Typography>
+                                            </Box>
+                                        </Paper>
                                     </Box>
                                 )}
 
                                 {selectedTalep.yeni_adres && (
                                     <Box sx={{ mb: 2 }}>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Yeni Adres
-                                        </Typography>
-                                        <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'background.default' }}>
-                                            <Typography variant="body1">
-                                                {selectedTalep.yeni_adres}
+                                        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Adres
                                             </Typography>
+                                            <Box sx={{ mt: 1 }}>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ 
+                                                        textDecoration: 'line-through',
+                                                        mb: 1,
+                                                        color: 'text.secondary'
+                                                    }}
+                                                >
+                                                    {selectedTalep.eski_adres || '(Boş)'}
+                                                </Typography>
+                                                <Typography variant="body1" color="primary" fontWeight="bold">
+                                                    {selectedTalep.yeni_adres}
+                                                </Typography>
+                                            </Box>
                                         </Paper>
                                     </Box>
                                 )}
 
-                                {selectedTalep.profil_resmi_var && (
+                                {selectedTalep.yeni_profil_resmi_var && (
                                     <Box sx={{ mb: 2 }}>
-                                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Profil Resmi
-                                        </Typography>
                                         <Alert severity="info">
                                             Çalışan yeni bir profil resmi yükledi. Onaylandığında otomatik olarak uygulanacaktır.
                                         </Alert>

@@ -22,6 +22,11 @@ from .views import (
     KisitlamaKuraliViewSet,
     VardiyaBaslatBitirView,
     AdminIstatistiklerView,
+    TopluMusaitlikIceAktarView,
+    ProfilView,
+    AdminProfilOnayView,
+    MusaitlikDurumuView,
+    AdminOnayGecmisiView
 )
 
 router = DefaultRouter()
@@ -42,6 +47,7 @@ urlpatterns = [
     path('istekler/<int:pk>/yanitla/', VardiyaIstegiYanitlaView.as_view(), name='takas-istek-yanitla'),
     path('admin/istekler/', AdminIstekListView.as_view(), name='admin-takas-istek-list'),
     path('admin/istekler/<int:pk>/aksiyon/', AdminIstekActionView.as_view(), name='admin-takas-istek-aksiyon'),
+    path('admin/onay-gecmisi/', AdminOnayGecmisiView.as_view(), name='admin-onay-gecmisi'),
 
     # Vardiya İptal İstekleri (YENİ)
     path('iptal-istekleri/', VardiyaIptalIstegiOlusturView.as_view(), name='iptal-istek-olustur'),
@@ -57,5 +63,7 @@ urlpatterns = [
     
     # Admin İstatistikler
     path('admin/istatistikler/', AdminIstatistiklerView.as_view(), name='admin-istatistikler'),
+    path('musaitlik-durumu/', MusaitlikDurumuView.as_view(), name='musaitlik-durumu'),
+    path('musaitlik/toplu-ice-aktar/', TopluMusaitlikIceAktarView.as_view(), name='toplu-musaitlik-ice-aktar'),
 
 ]
